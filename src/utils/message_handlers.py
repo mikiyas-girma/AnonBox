@@ -1,6 +1,6 @@
 from main_bot import bot
 from telebot.types import (ReplyKeyboardMarkup, KeyboardButton,
-                           )
+                           InlineKeyboardButton, InlineKeyboardMarkup)
 from models.models import User, SessionLocal
 
 
@@ -48,12 +48,28 @@ def handle_question(message):
 ``` if you don't see a category that fits your question, \
 choose 'Other' option```",
                      parse_mode="Markdown", reply_markup=keyboard)
-    bot.register_next_step_handler(message, handle_category)
+    bot.register_next_step_handler(message, handle_category, message.text)
     bot.register_next_step_handler(message, send_welcome)
 
 
-def handle_category(message):
-    bot.send_message(message.chat.id, "Your question has been submitted")
+def handle_category(message, question):
+    category = message.text
+    bot.send_message(message.chat.id, "preview your question and press submit \
+once you are done")
+    keyboard = InlineKeyboardMarkup()
+    keyboard.row_width = 2
+    keyboard.add(InlineKeyboardButton('Edit Question', callback_data='Ask a question'),
+                 InlineKeyboardButton('Cancel', callback_data='cancel'),
+                 InlineKeyboardButton('Submit', callback_data='submit'))
+
+    bot.send_message(message.chat.id, f"#{category}\n\n{question}\n\nBy: \
+{message.from_user.username}\n ``` Status: previewing```",
+                     parse_mode="Markdown", reply_markup=keyboard)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'Ask a question')
+def handle_edit_question(call):
+    handle_ask_question(call.message)
 
 
 @bot.message_handler(content_types=['photo'])
