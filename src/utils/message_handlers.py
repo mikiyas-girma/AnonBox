@@ -1,35 +1,59 @@
 from main_bot import bot
 from telebot.types import (ReplyKeyboardMarkup, KeyboardButton,
-                           KeyboardButtonPollType)
+                           )
 from models.models import User, SessionLocal
 
 
 @bot.message_handler(commands=['start', 'hello'])
 def send_welcome(message):
-    print(message.chat.id)
+    keyboard = ReplyKeyboardMarkup()
+    keyboard.resize_keyboard = True
+    keyboard.row_width = 2
+    keyboard.add(KeyboardButton('Ask a question'),
+                 KeyboardButton('Search questions'),
+                 KeyboardButton('Browse Questions'),
+                 KeyboardButton('Trending Answers'),
+                 KeyboardButton('Profile'),
+                 KeyboardButton('Leaderboard'),
+                 KeyboardButton('More'))
+
+    bot.send_message(message.chat.id, "Select an option",
+                     reply_markup=keyboard)
+
+
+@bot.message_handler(func=lambda message: message.text == 'Ask a question')
+def handle_ask_question(message):
+    # Your code here
+    bot.send_message(
+        message.chat.id,
+        "Send me your question  ``` Note that you can send your questions \
+through voice messages, images, videos, and documents```",
+        parse_mode="Markdown")
+    bot.register_next_step_handler(message, handle_question)
+
+
+def handle_question(message):
+
     keyboard = ReplyKeyboardMarkup(one_time_keyboard=True)
     keyboard.resize_keyboard = True
     keyboard.row_width = 2
-    keyboard.add(KeyboardButton('finish'),
-                 KeyboardButton('continue'),
-                 KeyboardButton(
-                     'create poll',
-                     request_poll=KeyboardButtonPollType('regular')))
+    keyboard.add(KeyboardButton('Technology'),
+                 KeyboardButton('Relationship'),
+                 KeyboardButton('Health'),
+                 KeyboardButton('Business'),
+                 KeyboardButton('Education'),
+                 KeyboardButton('Politics'),
+                 KeyboardButton('Other'))
+    bot.send_message(message.chat.id, "Choose a category for your question \
+``` if you don't see a category that fits your question, \
+choose 'Other' option```",
+                     parse_mode="Markdown", reply_markup=keyboard)
+    bot.register_next_step_handler(message, handle_category)
+    bot.register_next_step_handler(message, send_welcome)
 
-    print(bot.get_chat_member_count('@tikvahethiopia'))
 
-    bot.send_message(message.chat.id, f"{message.from_user.first_name}" +
-                     " /register \n /list ", reply_markup=keyboard)
-
-
-def handle_command(bot, message):
-    command = message.text
-    if command == "/photo":
-        bot.send_message(message.chat.id, text="Please upload jpg type image")
-    elif command == "/videos":
-        bot.send_message(message.chat.id, text="Please upload video")
-    elif command == "/doc":
-        bot.send_message(message.chat.id, text="Please upload your doc")
+def handle_category(message):
+    bot.send_message(message.chat.id, "Your question has been submitted")
 
 
 @bot.message_handler(content_types=['photo'])
@@ -70,11 +94,6 @@ def send_link(message):
                      "link to the bot: http://t.me/Pybot_exBot")
 
 
-@bot.message_handler(commands=['photo', 'videos', 'doc'])
-def prompt_user(message):
-    handle_command(bot, message)
-
-
 @bot.message_handler(commands=['register'])
 def register(message):
     session = SessionLocal()
@@ -104,7 +123,8 @@ def list_users(message):
     users = session.query(User).all()
 
     if users:
-        users_list = '\n'.join([f" {user.username} - {user.first_name} - {user.last_name}" for user in users])
+        users_list = '\n'.join([f" {user.username} - {user.first_name} -"
+                                f"{user.last_name}" for user in users])
         bot.reply_to(message, f"Registered users:\n{users_list}")
     else:
         bot.reply_to(message, "No users found")
