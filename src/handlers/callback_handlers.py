@@ -33,14 +33,6 @@ def confirm_command(message):
                      reply_markup=markup)
 
 
-@bot.callback_query_handler(func=lambda call: True)
-def handle_callback_query(call):
-    callback_data = call.data
-    callback_sender = call.from_user
-
-    if callback_data == 'confirm':
-        bot.answer_callback_query(call.id, text="confirmed", show_alert=True)
-    elif callback_data == 'cancel':
-        bot.answer_callback_query(
-            call.id,
-            f"{callback_sender.first_name} you have cancelled it")
+@bot.callback_query_handler(func=lambda call: call.data == 'confirm')
+def confirm_callback(call):
+    bot.answer_callback_query(call.id, 'confirmed', show_alert=True)

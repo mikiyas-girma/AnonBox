@@ -1,8 +1,10 @@
 import telebot
 from main_bot import bot
 from flask import Flask, request
-from utils import (message_handlers, inline_handlers,
-                   callback_handlers, keyboards)
+from handlers import (message_handlers, inline_handlers,
+                      callback_handlers)
+from utils import keyboards
+from models.engine.storage import init_db
 
 # reference to import all handlers
 message_handlers
@@ -23,4 +25,5 @@ def webhook_handler():
 
 
 if __name__ == '__main__':
+    init_db()
     app.run(host='0.0.0.0', port=5000)
