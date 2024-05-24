@@ -1,3 +1,4 @@
+from sqlalchemy import select
 from main_bot import bot
 from telebot.types import (ReplyKeyboardMarkup, KeyboardButton,
                            InlineKeyboardButton, InlineKeyboardMarkup)
@@ -47,7 +48,7 @@ category = None
 def handle_question(message):
 
     keyboard = ReplyKeyboardMarkup(one_time_keyboard=True)
-    keyboard.resize_keyboard = True
+    # keyboard.resize_keyboard = True
     keyboard.row_width = 2
     keyboard.add(KeyboardButton('Technology'),
                  KeyboardButton('Relationship'),
@@ -71,7 +72,7 @@ choose 'Other' option```",
         question = message.text
 
         bot.register_next_step_handler(message, handle_category, question)
-        # bot.register_next_step_handler(message, send_welcome)
+        bot.register_next_step_handler(message, send_welcome)
 
 
 def handle_category(message, question):
@@ -89,7 +90,7 @@ once you are done")
     keyboard.add(InlineKeyboardButton('Edit Question',
                                       callback_data='Edit Question'),
                  InlineKeyboardButton('Cancel', callback_data='Cancel'),
-                 InlineKeyboardButton('Submit', callback_data='submit'))
+                 InlineKeyboardButton('Submit', callback_data='Submitted'))
 
     bot.send_message(message.chat.id, f"#{category}\n\n{question}\n\nBy: \
 {message.from_user.username}\n ``` Status: previewing```",
@@ -106,11 +107,26 @@ def handle_edit_question(call):
 
 
 # submit question callback handler
-@bot.callback_query_handler(func=lambda call: call.data == 'submit')
+@bot.callback_query_handler(func=lambda call: call.data == 'Submitted' or
+                            call.data == 'Resubmitted')
 def handle_submit_question(call):
     global question, category
     session = SessionLocal()
     try:
+        if call.data == 'Resubmitted':
+            stmt = select(Question).where(
+                Question.question_id == call.message.message_id)
+            qst = session.scalars(stmt).one()
+            qst.status = "pending"
+            session.commit()
+            bot.answer_callback_query(
+                call.id,
+                "Your question has been resubmitted for approval! it will be \
+reviewed by our team and published shortly",
+                show_alert=True)
+            bot.send_message(call.message.chat.id, call.data)
+            return
+
         new_question = Question(
             question_id=call.message.message_id,
             user_id=call.from_user.id,
@@ -121,35 +137,62 @@ def handle_submit_question(call):
         )
         session.add(new_question)
         session.commit()
-        bot.answer_callback_query(call.message.chat.id,
-                                  "Question submitted successfully",
-                                  show_alert=True)
+        bot.send_message(call.message.chat.id, call.data)
+
     except Exception as e:
         session.rollback()
         print(e)
     finally:
         session.close()
-    print(f"User id: {call.from_user.id}", f"question: {question}",
-          f"category: {category}", f"username: {call.from_user.username}")
 
-    bot.register_next_step_handler(call.message, handle_pending_question)
-    send_welcome(call.message)
+        keyboard = InlineKeyboardMarkup()
+        keyboard.row_width = 2
+        keyboard.add(InlineKeyboardButton('Cancel', callback_data='Cancelled'))
+        bot.answer_callback_query(
+            call.id,
+            "Your question has been submitted for approval! it will be \
+reviewed by our team and published shortly",
+            show_alert=True)
+        # Fetch category, question, and username from the database
+        session = SessionLocal()
+        question_data = session.query(Question).filter_by(question_id=call.message.message_id).first()
+        category = question_data.category
+        question = question_data.question
+        username = question_data.username
+        session.close()
+        bot.edit_message_text(chat_id=call.message.chat.id,
+                              message_id=call.message.message_id,
+                              text=f"#{category}\n\n{question}\
+        \n\nBy: {username}\n ``` Status: {'pending'}```",
+                              parse_mode="Markdown", reply_markup=keyboard)
 
 
-def handle_pending_question(message):
-    bot.send_message(message.chat.id, "Your question is being reviewed. \
-You will be notified once it is approved")
+@bot.callback_query_handler(func=lambda call: call.data == 'Cancelled')
+def handle_cancelled(call):
+    global question, category
     keyboard = InlineKeyboardMarkup()
-    keyboard.row_width = 1
-    keyboard.add(InlineKeyboardButton('Cancel', callback_data='Cancel'))
-    bot.send_message(message.chat.id, "You can ask another question or \
-browse questions while you wait", reply_markup=keyboard)
-
-
-@bot.message_handler(commands=['link'])
-def send_link(message):
-    bot.send_message(message.chat.id,
-                     "link to the bot: http://t.me/Pybot_exBot")
+    keyboard.row_width = 2
+    keyboard.add(InlineKeyboardButton('Resubmit', callback_data='Resubmitted'))
+    bot.edit_message_text(chat_id=call.message.chat.id,
+                          message_id=call.message.message_id,
+                          text=f"#{category}\n\n{question}\
+\n\nBy: {call.message.chat.username}\n ``` Status: {call.data}```",
+                          parse_mode="Markdown", reply_markup=keyboard)
+    bot.send_message(call.message.chat.id, "Your question has been cancelled")
+    try:
+        session = SessionLocal()
+        question = session.query(Question).\
+            filter_by(question_id=call.message.message_id).first()
+        stmt = select(Question).where(
+            Question.question_id == question.question_id)
+        qst = session.scalars(stmt).one()
+        qst.status = "cancelled"
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        print(e)
+    finally:
+        session.close()
 
 
 @bot.message_handler(commands=['register'])
