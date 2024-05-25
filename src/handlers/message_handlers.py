@@ -4,12 +4,25 @@ from telebot.types import (ReplyKeyboardMarkup, KeyboardButton,
                            InlineKeyboardButton, InlineKeyboardMarkup)
 from models.engine.storage import SessionLocal
 from models.user import User
+from models.states import State
 from models.question import Question
 
 
 @bot.message_handler(func=lambda message: message.text == 'Cancel')
 @bot.message_handler(commands=['start', 'hello'])
 def send_welcome(message):
+    session = SessionLocal()
+    states = session.query(State).filter_by(user_id=message.chat.id).first()
+    if not states:
+        new_state = State(user_id=message.chat.id,
+                          question_type='Popular',
+                          category='All',
+                          timeframe='Today')
+        session.add(new_state)
+        session.commit()
+        session.close()
+    else:
+        session.close()
     keyboard = ReplyKeyboardMarkup()
     keyboard.resize_keyboard = True
     keyboard.row_width = 2

@@ -2,7 +2,7 @@ import telebot
 from main_bot import bot
 from flask import Flask, request
 from handlers import (message_handlers, inline_handlers,
-                      callback_handlers)
+                      callback_handlers, browse_questions)
 from utils import keyboards
 from models.engine.storage import init_db
 
@@ -11,6 +11,7 @@ message_handlers
 inline_handlers
 callback_handlers
 keyboards
+browse_questions
 
 
 app = Flask(__name__)
