@@ -89,7 +89,7 @@ once you are done")
     keyboard.row_width = 2
     keyboard.add(InlineKeyboardButton('Edit Question',
                                       callback_data='Edit Question'),
-                 InlineKeyboardButton('Cancel', callback_data='Cancel'),
+                 InlineKeyboardButton('Cancel', callback_data='Cancelled'),
                  InlineKeyboardButton('Submit', callback_data='Submitted'))
 
     bot.send_message(message.chat.id, f"#{category}\n\n{question}\n\nBy: \
@@ -114,6 +114,7 @@ def handle_submit_question(call):
     session = SessionLocal()
     try:
         if call.data == 'Resubmitted':
+            print('called')
             stmt = select(Question).where(
                 Question.question_id == call.message.message_id)
             qst = session.scalars(stmt).one()
@@ -155,7 +156,8 @@ reviewed by our team and published shortly",
             show_alert=True)
         # Fetch category, question, and username from the database
         session = SessionLocal()
-        question_data = session.query(Question).filter_by(question_id=call.message.message_id).first()
+        question_data = session.query(Question).filter_by(
+            question_id=call.message.message_id).first()
         category = question_data.category
         question = question_data.question
         username = question_data.username
@@ -178,15 +180,31 @@ def handle_cancelled(call):
                           text=f"#{category}\n\n{question}\
 \n\nBy: {call.message.chat.username}\n ``` Status: {call.data}```",
                           parse_mode="Markdown", reply_markup=keyboard)
-    bot.send_message(call.message.chat.id, "Your question has been cancelled")
+    bot.send_message(call.message.chat.id, "Cancelled")
     try:
         session = SessionLocal()
-        question = session.query(Question).\
+        questionary = session.query(Question).\
             filter_by(question_id=call.message.message_id).first()
-        stmt = select(Question).where(
-            Question.question_id == question.question_id)
-        qst = session.scalars(stmt).one()
-        qst.status = "cancelled"
+        if questionary:
+            stmt = select(Question).where(
+                Question.question_id == questionary.question_id)
+            qst = session.scalars(stmt).one()
+            print(qst)
+            qst.status = "cancelled"
+        else:
+            new_question = Question(
+                question_id=call.message.message_id,
+                user_id=call.from_user.id,
+                question=question,
+                category=category,
+                status="cancelled",
+                username=call.from_user.username
+            )
+            print(new_question.category,
+                  new_question.question,
+                  new_question.status, new_question.username)
+            session.add(new_question)
+            print()
         session.commit()
     except Exception as e:
         session.rollback()
