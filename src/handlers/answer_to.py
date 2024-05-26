@@ -23,8 +23,19 @@ def answer_callback(message):
         try:
             question = session.query(Question).get(question_id)
             if question:
-                print('yes the question is there with id {}'.format(question_id))
-                msg = bot.reply_to(message=message,
+                kbd = InlineKeyboardMarkup()
+                kbd.row_width = 2
+                kbd.add(InlineKeyboardButton(
+                    'Browse (5)', callback_data=f'browse_{question_id}'),
+                        InlineKeyboardButton(
+                            'Subscribe', callback_data='subscribe'))
+                the_question = bot.send_message(
+                    chat_id=message.chat.id,
+                    text=f"#{question.category}\n\n{question.question}\
+                \n\nBy: {question.username}\n ``` Status: {question.status}```",
+                    reply_markup=kbd,
+                    parse_mode="Markdown")
+                msg = bot.reply_to(the_question,
                                    text="Send me your answer  ``` Note that you can send your answers \
 through voice messages, images, videos, and documents```",
                                    parse_mode='Markdown',
@@ -61,14 +72,148 @@ def process_answer(message, question_id):
             user_id=message.from_user.id,
             chat_id=message.chat.id,
             answer=answer,
+            status='draft',
             reputation=0,
             username=message.from_user.username
         )
+        anw_keyboard = create_answer_keyboard(answer_id=new_answer.answer_id)
+
         session.add(new_answer)
         session.commit()
-        bot.send_message(message.chat.id, f"{new_answer.answer}\n\nBy: {new_answer.username}")
+        bot.send_message(message.chat.id,
+                         f"{new_answer.answer}\n\nBy: {new_answer.username}",
+                         reply_markup=anw_keyboard)
+        bot.register_next_step_handler(message, process_post_answer,
+                                       new_answer.answer_id, message.message_id)
+        from handlers.message_handlers import send_welcome
+        send_welcome(message=message)
     except Exception as e:
         session.rollback()
         print(e)
     finally:
         session.close()
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('edit_'))
+def edit_answer(call):
+    answer_id = int(call.data.split('_')[-1])
+    cancel_keyboard = ReplyKeyboardMarkup(one_time_keyboard=True)
+    cancel_keyboard.resize_keyboard = True
+    cancel_keyboard.row_width = 1
+    cancel_keyboard.add(KeyboardButton('Cancel'))
+    bot.send_message(
+        chat_id=call.message.chat.id,
+        text="Send me your edit.. \n ``` Note that you can send your edit \
+through voice messages, images, videos, and documents```",
+        reply_markup=cancel_keyboard,
+        parse_mode='Markdown')
+    bot.register_next_step_handler(call.message, process_edit_answer,
+                                   answer_id, call.message.message_id)
+
+
+def process_edit_answer(message, answer_id, original_message_id):
+    if message.text == 'Cancel':
+        from handlers.message_handlers import send_welcome
+        send_welcome(message)
+        return
+    answer_id = int(answer_id)
+    session = SessionLocal()
+    try:
+        answer = session.query(Answer).get(answer_id)
+        answer.answer = message.text
+        answer.status = 'draft'
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        print(e)
+    finally:
+        session = SessionLocal()
+        answer_data = session.query(Answer).filter_by(answer_id=answer_id).first()
+        answer_data.status = 'draft'
+        answer_data.answer = message.text
+        answer_data.username = message.from_user.username
+        anw_keyboard = create_answer_keyboard(answer_id=answer_id)
+        bot.send_message(
+            chat_id=message.chat.id,
+            text="Preview your edit and click on post to save changes",
+        )
+        bot.send_message(
+            chat_id=message.chat.id,
+            text=f"{answer_data.answer}\n\nBy: {answer_data.username}",
+            reply_markup=anw_keyboard
+        )
+        # bot.edit_message_text(
+        #     chat_id=message.chat.id,
+        #     message_id=original_message_id,
+        #     text=f"{answer_data.answer}\n\nBy: {answer_data.username}"
+        # )
+        # bot.edit_message_reply_markup(
+        #     chat_id=message.chat.id,
+        #     message_id=original_message_id,
+        #     reply_markup=anw_keyboard
+        # )
+        bot.delete_message(chat_id=message.chat.id,
+                           message_id=original_message_id)
+
+        session.commit()
+        session.close()
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('post_'))
+def post_answer(call):
+    answer_id = int(call.data.split('_')[-1])
+    session = SessionLocal()
+    try:
+        answer = session.query(Answer).get(answer_id)
+        answer.status = 'posted'
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        print(e)
+    finally:
+        bot.edit_message_reply_markup(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            reply_markup=None
+        )
+        session.close()
+
+
+def process_post_answer(message, answer_id, original_message_id):
+    session = SessionLocal()
+    try:
+        answer = session.query(Answer).get(answer_id)
+        answer.status = 'posted'
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        print(e)
+    finally:
+        session.close()
+        bot.delete_message(chat_id=message.chat.id,
+                           message_id=original_message_id)
+        from handlers.message_handlers import send_welcome
+        send_welcome(message)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'cancel')
+def cancel_callback(call):
+    bot.delete_message(chat_id=call.message.chat.id,
+                       message_id=call.message.message_id)
+    from handlers.message_handlers import send_welcome
+    send_welcome(call.message)
+
+
+def create_answer_keyboard(answer_id):
+    anw_keyboard = InlineKeyboardMarkup()
+    anw_keyboard.row_width = 2
+    anw_keyboard.add(InlineKeyboardButton(
+        'Edit', callback_data=f'edit_{answer_id}'),
+        InlineKeyboardButton(
+        'Notify Settings', callback_data='notify'),
+        InlineKeyboardButton(
+        'Cancel', callback_data='cancel'),
+        InlineKeyboardButton(
+        'Post', callback_data=f'post_{answer_id}')
+        )
+    return anw_keyboard

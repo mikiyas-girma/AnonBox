@@ -10,5 +10,6 @@ class Answer(Base):
     user_id = Column(BigInteger, nullable=False)
     chat_id = Column(BigInteger, nullable=False)
     answer = Column(String, nullable=False)
+    status = Column(String, nullable=False)
     reputation = Column(BigInteger, nullable=False)
     username = Column(String, nullable=False)
