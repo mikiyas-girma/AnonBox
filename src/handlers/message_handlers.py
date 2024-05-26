@@ -282,7 +282,6 @@ def handle_cancelled(call):
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('approve'))
 def handle_admin_action(call):
-    print(call.data)
     session = SessionLocal()
     try:
         question_id = int(call.data.split('_')[-1])
@@ -296,13 +295,69 @@ def handle_admin_action(call):
             bot.send_message(PUBLIC_CHANNEL_ID,
                              f"#{question.category}\n\n{question.question}\
             \n\nBy: {question.username}")
+
+            keyboard = InlineKeyboardMarkup()
+            keyboard.row_width = 2
+            keyboard.add(InlineKeyboardButton('Reject',
+                                              callback_data='Reject'))
+
             bot.send_message(chat_id=question.user_id,
                              text="Your question has been approved",
                              reply_to_message_id=question.question_id)
+
+            bot.edit_message_text(
+                chat_id=question.chat_id,
+                message_id=question.question_id,
+                text=f"#{question.category}\n\n{question.question}\
+                \n\nBy: {question.username}\n ``` Status: {question.status}```\
+                ",
+                parse_mode="Markdown")
+
+            bot.edit_message_text(chat_id=ADMIN_CHANNEL_ID,
+                                  message_id=question.admin_message_id,
+                                  text=f"#{question.category}\n\n{question.question}\
+            \n\nBy: {question.username}\n ``` Status: {question.status}```",
+                                  parse_mode="Markdown", reply_markup=keyboard)
+
         elif call.data.startswith('reject'):
             question.status = 'rejected'
             bot.send_message(question.user_id,
                              "Your question has been rejected")
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        print(e)
+    finally:
+        session.close()
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('reject'))
+def handle_reject(call):
+    session = SessionLocal()
+    try:
+        question_id = int(call.data.split('_')[-1])
+        question = session.query(Question).get(question_id)
+        if not question:
+            bot.answer_callback_query(call.id, "Question not found")
+        question.status = 'rejected'
+        session.commit()
+        keyboard = InlineKeyboardMarkup()
+        keyboard.row_width = 2
+        keyboard.add(InlineKeyboardButton('Approve',
+                                          callback_data='Approve'))
+        bot.send_message(question.user_id,
+                         "Your question has been rejected",
+                         reply_to_message_id=question.question_id)
+        bot.edit_message_text(chat_id=question.chat_id,
+                              message_id=question.question_id,
+                              text=f"#{question.category}\n\n{question.question}\
+            \n\nBy: {question.username}\n ``` Status: {question.status}```",
+                              parse_mode="Markdown")
+        bot.edit_message_text(chat_id=ADMIN_CHANNEL_ID,
+                              message_id=question.admin_message_id,
+                              text=f"#{question.category}\n\n{question.question}\
+        \n\nBy: {question.username}\n ``` Status: {question.status}```",
+                              parse_mode="Markdown", reply_markup=keyboard)
         session.commit()
     except Exception as e:
         session.rollback()
