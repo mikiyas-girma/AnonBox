@@ -1,7 +1,8 @@
 from main_bot import bot
 import telebot
 
-from telebot.types import ReplyKeyboardMarkup, KeyboardButton
+from telebot.types import (ReplyKeyboardMarkup, KeyboardButton,
+                           InlineKeyboardMarkup, InlineKeyboardButton)
 
 # markup = ReplyKeyboardMarkup(resize_keyboard=True)
 # markup.add(KeyboardButton('Btn 1'))

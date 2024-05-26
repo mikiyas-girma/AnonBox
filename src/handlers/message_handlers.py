@@ -6,6 +6,11 @@ from models.engine.storage import SessionLocal
 from models.user import User
 from models.states import State
 from models.question import Question
+import os
+from utils.question_util import send_pending_questions, monitor_question_status
+
+ADMIN_CHANNEL_ID = os.getenv('ADMIN_CHANNEL_ID')
+PUBLIC_CHANNEL_ID = os.getenv('PUBLIC_CHANNEL_ID')
 
 
 @bot.message_handler(func=lambda message: message.text == 'Cancel')
@@ -157,11 +162,15 @@ reviewed by our team and published shortly",
         session.rollback()
         print(e)
     finally:
-        session.close()
+        admin_keyboard = create_admin_keyboard(call.message.message_id)
+        bot.send_message(ADMIN_CHANNEL_ID, text=f"#{category}\n\n{question}\
+        \n\nBy: {call.from_user.username}\n ``` Status: {new_question.status}```",
+                         reply_markup=admin_keyboard, parse_mode="Markdown")
 
         keyboard = InlineKeyboardMarkup()
         keyboard.row_width = 2
         keyboard.add(InlineKeyboardButton('Cancel', callback_data='Cancelled'))
+        send_pending_questions()
         bot.answer_callback_query(
             call.id,
             "Your question has been submitted for approval! it will be \
@@ -181,6 +190,8 @@ reviewed by our team and published shortly",
         \n\nBy: {username}\n ``` Status: {'pending'}```",
                               parse_mode="Markdown", reply_markup=keyboard)
 
+        session.close()
+
 
 @bot.callback_query_handler(func=lambda call: call.data == 'Cancelled')
 def handle_cancelled(call):
@@ -194,6 +205,7 @@ def handle_cancelled(call):
 \n\nBy: {call.message.chat.username}\n ``` Status: {call.data}```",
                           parse_mode="Markdown", reply_markup=keyboard)
     bot.send_message(call.message.chat.id, "Cancelled")
+    monitor_question_status()
     try:
         session = SessionLocal()
         questionary = session.query(Question).\
@@ -224,6 +236,42 @@ def handle_cancelled(call):
         print(e)
     finally:
         session.close()
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith(('approve', 'reject')))
+def handle_admin_action(call):
+    session = SessionLocal()
+    try:
+        question_id = int(call.data.split('_')[-1])
+        question = session.query(Question).filter_by(id=question_id).first()
+        if call.data.startswith('approve'):
+            question.status = 'approved'
+            bot.send_message(question.user_id,
+                             "Your question has been approved and published")
+            bot.send_message(PUBLIC_CHANNEL_ID, f"#{question.category}\n\n{question.question}\
+            \n\nBy: {question.username}")
+        elif call.data.startswith('reject'):
+            question.status = 'rejected'
+            bot.send_message(question.user_id,
+                             "Your question has been rejected")
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        print(e)
+    finally:
+        session.close()
+        send_pending_questions()
+
+
+def create_admin_keyboard(question_id):
+    keyboard = InlineKeyboardMarkup()
+    keyboard.row_width = 2
+    approve_button = InlineKeyboardButton(
+        "Approve", callback_data=f"approve_{question_id}")
+    reject_button = InlineKeyboardButton(
+        "Reject", callback_data=f"reject_{question_id}")
+    keyboard.add(approve_button, reject_button)
+    return keyboard
 
 
 @bot.message_handler(commands=['register'])
