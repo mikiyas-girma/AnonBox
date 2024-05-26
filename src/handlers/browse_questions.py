@@ -36,10 +36,12 @@ Unanswered', callback_data='Unanswered'),
                      reply_markup=keyboard)
 
 
-@bot.callback_query_handler(func=lambda call: True)
+@bot.callback_query_handler(func=lambda call: call.data in [
+    'Popular', 'Unanswered', 'Category', 'Timeframe'])
 def callback_query(call):
     session = SessionLocal()
-    states = session.query(State).filter_by(user_id=call.message.chat.id).first()
+    states = session.query(State).filter_by(
+        user_id=call.message.chat.id).first()
     if call.data == 'Popular':
         states.question_type = 'Popular'
     elif call.data == 'Unanswered':

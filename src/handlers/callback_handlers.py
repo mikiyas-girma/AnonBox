@@ -8,7 +8,7 @@ from telebot.util import quick_markup
 @bot.message_handler(commands=['social'])
 def list_social_media(message):
     markup = quick_markup({
-            'Twitter': {'url': 'https://twitter.com'},
+            'Twitter': {'url': 'https://t.me/botethiopia_bot', 'callback_data': 'inBot'},
             'Facebook': {'url': 'https://facebook.com'},
             'Confirm': {'callback_data': 'confirm'},
         }, row_width=2)
@@ -25,9 +25,9 @@ def confirm_command(message):
     markup.add(InlineKeyboardButton(
         'admin',
         switch_inline_query_chosen_chat=SwitchInlineQueryChosenChat(
-            'admin', allow_user_chats=True)),
+            'admin', allow_user_chats=True, )),
 
-               InlineKeyboardButton('confirm', callback_data='confirm'),
+               InlineKeyboardButton('confirm', callback_data='confirm',),
                InlineKeyboardButton('cancel', callback_data='cancel'))
     bot.send_message(message.chat.id, "Are you sure you want to confirm?",
                      reply_markup=markup)

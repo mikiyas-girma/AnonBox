@@ -2,6 +2,7 @@ from sqlalchemy import select
 from main_bot import bot
 from telebot.types import (ReplyKeyboardMarkup, KeyboardButton,
                            InlineKeyboardButton, InlineKeyboardMarkup)
+from telebot.util import quick_markup
 from models.engine.storage import SessionLocal
 from models.user import User
 from models.states import State
@@ -9,6 +10,7 @@ from models.question import Question
 from models.admin_message import AdminMessage
 from telebot.types import Message, Chat
 import os
+from handlers.answer_to import answer_callback
 
 ADMIN_CHANNEL_ID = os.getenv('ADMIN_CHANNEL_ID')
 PUBLIC_CHANNEL_ID = os.getenv('PUBLIC_CHANNEL_ID')
@@ -17,6 +19,9 @@ PUBLIC_CHANNEL_ID = os.getenv('PUBLIC_CHANNEL_ID')
 @bot.message_handler(func=lambda message: message.text == 'Cancel')
 @bot.message_handler(commands=['start', 'hello'])
 def send_welcome(message):
+    if message.text.startswith('/start answer_'):
+        answer_callback(message)
+        return
     session = SessionLocal()
     states = session.query(State).filter_by(user_id=message.chat.id).first()
     if not states:
@@ -291,14 +296,10 @@ def handle_admin_action(call):
             bot.answer_callback_query(call.id, "Question not found")
         if call.data.startswith('approve'):
 
-            user_keyboard = InlineKeyboardMarkup()
-            user_keyboard.row_width = 2
-            user_keyboard.add(InlineKeyboardButton(
-                            'Answer', callback_data='Answer'),
-                         InlineKeyboardButton(
-                            'Browse (5)', callback_data='Browse'))
             question.status = 'approved'
             session.commit()
+
+            user_keyboard = create_answer_keyboard(question.question_id)
             bot.send_message(PUBLIC_CHANNEL_ID,
                              f"#{question.category}\n\n{question.question}\
             \n\nBy: {question.username}", reply_markup=user_keyboard)
@@ -386,6 +387,21 @@ def create_admin_keyboard(question_id):
     reject_button = InlineKeyboardButton(
         "Reject", callback_data=f"reject_{question_id}")
     keyboard.add(approve_button, reject_button)
+    return keyboard
+
+
+def create_answer_keyboard(question_id):
+    keyboard = InlineKeyboardMarkup()
+    keyboard.row_width = 2
+    answer_button = InlineKeyboardButton(
+        "Answer",
+        url=f"https://t.me/{bot.get_me().username}?start=answer_{question_id}"
+        )
+    browse_button = InlineKeyboardButton(
+        "Browse (5)",
+        url=f"https://t.me/{bot.get_me().username}?start=browse_{question_id}"
+    )
+    keyboard.add(answer_button, browse_button)
     return keyboard
 
 
