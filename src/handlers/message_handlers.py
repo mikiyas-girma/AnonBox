@@ -290,20 +290,27 @@ def handle_admin_action(call):
         if not question:
             bot.answer_callback_query(call.id, "Question not found")
         if call.data.startswith('approve'):
+
+            user_keyboard = InlineKeyboardMarkup()
+            user_keyboard.row_width = 2
+            user_keyboard.add(InlineKeyboardButton(
+                            'Answer', callback_data='Answer'),
+                         InlineKeyboardButton(
+                            'Browse (5)', callback_data='Browse'))
             question.status = 'approved'
             session.commit()
             bot.send_message(PUBLIC_CHANNEL_ID,
                              f"#{question.category}\n\n{question.question}\
-            \n\nBy: {question.username}")
+            \n\nBy: {question.username}", reply_markup=user_keyboard)
 
-            keyboard = InlineKeyboardMarkup()
-            keyboard.row_width = 2
-            keyboard.add(InlineKeyboardButton('Reject',
-                                              callback_data='Reject'))
-
-            bot.send_message(chat_id=question.user_id,
-                             text="Your question has been approved",
-                             reply_to_message_id=question.question_id)
+            bot.send_message(
+                chat_id=question.user_id,
+                text=f"#{question.category}\n\n{question.question}\
+                \n\nBy: {question.username}\n ``` Status: {question.status}```\
+                ",
+                reply_to_message_id=question.question_id,
+                reply_markup=user_keyboard,
+                parse_mode="Markdown")
 
             bot.edit_message_text(
                 chat_id=question.chat_id,
@@ -312,6 +319,11 @@ def handle_admin_action(call):
                 \n\nBy: {question.username}\n ``` Status: {question.status}```\
                 ",
                 parse_mode="Markdown")
+
+            keyboard = InlineKeyboardMarkup()
+            keyboard.row_width = 2
+            keyboard.add(InlineKeyboardButton('Reject',
+                                              callback_data='Reject'))
 
             bot.edit_message_text(chat_id=ADMIN_CHANNEL_ID,
                                   message_id=question.admin_message_id,
