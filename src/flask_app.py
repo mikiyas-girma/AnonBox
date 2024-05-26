@@ -5,7 +5,6 @@ from handlers import (message_handlers, inline_handlers,
                       callback_handlers, browse_questions)
 from utils import keyboards
 from models.engine.storage import init_db
-# from utils.question_util import send_pending_questions
 
 # reference to import all handlers
 message_handlers
@@ -18,9 +17,7 @@ browse_questions
 app = Flask(__name__)
 
 
-# send_pending_questions()
-
-
+# Set webhook for the bot
 @app.route('/webhook', methods=['POST'])
 def webhook_handler():
     update = telebot.types.Update.de_json(

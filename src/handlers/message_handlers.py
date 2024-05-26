@@ -124,6 +124,9 @@ def handle_edit_question(call):
     bot.register_next_step_handler(call.message, handle_question)
 
 
+admin_message_ids = {}
+
+
 # submit question callback handler
 @bot.callback_query_handler(func=lambda call: call.data == 'Submitted' or
                             call.data == 'Resubmitted')
@@ -162,15 +165,16 @@ reviewed by our team and published shortly",
         session.rollback()
         print(e)
     finally:
-        admin_keyboard = create_admin_keyboard(call.message.message_id)
-        bot.send_message(ADMIN_CHANNEL_ID, text=f"#{category}\n\n{question}\
+        message_id = call.message.message_id
+        admin_keyboard = create_admin_keyboard(message_id)
+        admin_message = bot.send_message(ADMIN_CHANNEL_ID, text=f"#{category}\n\n{question}\
         \n\nBy: {call.from_user.username}\n ``` Status: {new_question.status}```",
-                         reply_markup=admin_keyboard, parse_mode="Markdown")
-
+                                         reply_markup=admin_keyboard, parse_mode="Markdown")
+        admin_message_ids[message_id] = admin_message.message_id
         keyboard = InlineKeyboardMarkup()
         keyboard.row_width = 2
         keyboard.add(InlineKeyboardButton('Cancel', callback_data='Cancelled'))
-        send_pending_questions()
+        # send_pending_questions()
         bot.answer_callback_query(
             call.id,
             "Your question has been submitted for approval! it will be \
@@ -205,7 +209,7 @@ def handle_cancelled(call):
 \n\nBy: {call.message.chat.username}\n ``` Status: {call.data}```",
                           parse_mode="Markdown", reply_markup=keyboard)
     bot.send_message(call.message.chat.id, "Cancelled")
-    monitor_question_status()
+
     try:
         session = SessionLocal()
         questionary = session.query(Question).\
@@ -229,8 +233,10 @@ def handle_cancelled(call):
                   new_question.question,
                   new_question.status, new_question.username)
             session.add(new_question)
-            print()
         session.commit()
+        if call.message.message_id in admin_message_ids:
+            bot.delete_message(ADMIN_CHANNEL_ID, admin_message_ids[call.message.message_id])
+            del admin_message_ids[call.message.message_id]
     except Exception as e:
         session.rollback()
         print(e)
@@ -260,7 +266,6 @@ def handle_admin_action(call):
         print(e)
     finally:
         session.close()
-        send_pending_questions()
 
 
 def create_admin_keyboard(question_id):
