@@ -6,6 +6,7 @@ from models.engine.storage import SessionLocal
 from models.user import User
 from models.states import State
 from models.question import Question
+from models.admin_message import AdminMessage
 import os
 from utils.question_util import send_pending_questions, monitor_question_status
 
@@ -124,31 +125,12 @@ def handle_edit_question(call):
     bot.register_next_step_handler(call.message, handle_question)
 
 
-admin_message_ids = {}
-
-
 # submit question callback handler
-@bot.callback_query_handler(func=lambda call: call.data == 'Submitted' or
-                            call.data == 'Resubmitted')
+@bot.callback_query_handler(func=lambda call: call.data == 'Submitted')
 def handle_submit_question(call):
     global question, category
     session = SessionLocal()
     try:
-        if call.data == 'Resubmitted':
-            print('called')
-            stmt = select(Question).where(
-                Question.question_id == call.message.message_id)
-            qst = session.scalars(stmt).one()
-            qst.status = "pending"
-            session.commit()
-            bot.answer_callback_query(
-                call.id,
-                "Your question has been resubmitted for approval! it will be \
-reviewed by our team and published shortly",
-                show_alert=True)
-            bot.send_message(call.message.chat.id, call.data)
-            return
-
         new_question = Question(
             question_id=call.message.message_id,
             user_id=call.from_user.id,
@@ -157,6 +139,16 @@ reviewed by our team and published shortly",
             status="pending",
             username=call.from_user.username
         )
+        message_id = call.message.message_id
+        admin_keyboard = create_admin_keyboard(message_id)
+        admin_message = bot.send_message(ADMIN_CHANNEL_ID, text=f"#{category}\n\n{question}\
+        \n\nBy: {call.from_user.username}\n ``` Status: {new_question.status}```",
+                                         reply_markup=admin_keyboard, parse_mode="Markdown")
+        new_admin_message = AdminMessage(
+            user_message_id=message_id,
+            admin_message_id=admin_message.message_id
+        )
+        session.add(new_admin_message)
         session.add(new_question)
         session.commit()
         bot.send_message(call.message.chat.id, call.data)
@@ -165,21 +157,15 @@ reviewed by our team and published shortly",
         session.rollback()
         print(e)
     finally:
-        message_id = call.message.message_id
-        admin_keyboard = create_admin_keyboard(message_id)
-        admin_message = bot.send_message(ADMIN_CHANNEL_ID, text=f"#{category}\n\n{question}\
-        \n\nBy: {call.from_user.username}\n ``` Status: {new_question.status}```",
-                                         reply_markup=admin_keyboard, parse_mode="Markdown")
-        admin_message_ids[message_id] = admin_message.message_id
         keyboard = InlineKeyboardMarkup()
         keyboard.row_width = 2
         keyboard.add(InlineKeyboardButton('Cancel', callback_data='Cancelled'))
-        # send_pending_questions()
         bot.answer_callback_query(
             call.id,
             "Your question has been submitted for approval! it will be \
 reviewed by our team and published shortly",
             show_alert=True)
+
         # Fetch category, question, and username from the database
         session = SessionLocal()
         question_data = session.query(Question).filter_by(
@@ -187,7 +173,6 @@ reviewed by our team and published shortly",
         category = question_data.category
         question = question_data.question
         username = question_data.username
-        session.close()
         bot.edit_message_text(chat_id=call.message.chat.id,
                               message_id=call.message.message_id,
                               text=f"#{category}\n\n{question}\
@@ -195,6 +180,48 @@ reviewed by our team and published shortly",
                               parse_mode="Markdown", reply_markup=keyboard)
 
         session.close()
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'Resubmitted')
+def handle_resubmitted(call):
+    session = SessionLocal()
+    stmt = select(Question).where(
+        Question.question_id == call.message.message_id)
+    qst = session.scalars(stmt).one()
+    qst.status = "pending"
+    session.commit()
+    message_id = call.message.message_id
+    admin_keyboard = create_admin_keyboard(message_id)
+    admin_message = bot.send_message(ADMIN_CHANNEL_ID, text=f"#{qst.category}\n\n{qst.question}\
+    \n\nBy: {call.from_user.username}\n ``` Status: {qst.status}```",
+                                     reply_markup=admin_keyboard,
+                                     parse_mode="Markdown")
+    new_admin_message = AdminMessage(
+        user_message_id=message_id,
+        admin_message_id=admin_message.message_id
+    )
+    session.add(new_admin_message)
+    session.commit()
+    bot.answer_callback_query(
+        call.id,
+        "Your question has been resubmitted for approval! it will be \
+reviewed by our team and published shortly",
+        show_alert=True)
+    bot.send_message(call.message.chat.id, call.data)
+    question_data = session.query(Question).filter_by(
+        question_id=call.message.message_id).first()
+    category = question_data.category
+    question = question_data.question
+    username = question_data.username
+    keyboard = InlineKeyboardMarkup()
+    keyboard.row_width = 2
+    keyboard.add(InlineKeyboardButton('Cancel', callback_data='Cancelled'))
+    bot.edit_message_text(chat_id=call.message.chat.id,
+                          message_id=call.message.message_id,
+                          text=f"#{category}\n\n{question}\
+    \n\nBy: {username}\n ``` Status: {'pending'}```",
+                          parse_mode="Markdown", reply_markup=keyboard)
+    session.close()
 
 
 @bot.callback_query_handler(func=lambda call: call.data == 'Cancelled')
@@ -218,8 +245,12 @@ def handle_cancelled(call):
             stmt = select(Question).where(
                 Question.question_id == questionary.question_id)
             qst = session.scalars(stmt).one()
-            print(qst)
             qst.status = "cancelled"
+            admin_message = session.query(AdminMessage).\
+                filter_by(user_message_id=questionary.question_id).first()
+            if admin_message:
+                bot.delete_message(ADMIN_CHANNEL_ID, admin_message.admin_message_id)
+                session.delete(admin_message)
         else:
             new_question = Question(
                 question_id=call.message.message_id,
@@ -234,9 +265,6 @@ def handle_cancelled(call):
                   new_question.status, new_question.username)
             session.add(new_question)
         session.commit()
-        if call.message.message_id in admin_message_ids:
-            bot.delete_message(ADMIN_CHANNEL_ID, admin_message_ids[call.message.message_id])
-            del admin_message_ids[call.message.message_id]
     except Exception as e:
         session.rollback()
         print(e)
