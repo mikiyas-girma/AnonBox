@@ -7,8 +7,8 @@ from models.user import User
 from models.states import State
 from models.question import Question
 from models.admin_message import AdminMessage
+from telebot.types import Message, Chat
 import os
-from utils.question_util import send_pending_questions, monitor_question_status
 
 ADMIN_CHANNEL_ID = os.getenv('ADMIN_CHANNEL_ID')
 PUBLIC_CHANNEL_ID = os.getenv('PUBLIC_CHANNEL_ID')
@@ -131,26 +131,29 @@ def handle_edit_question(call):
 @bot.callback_query_handler(func=lambda call: call.data == 'Submitted')
 def handle_submit_question(call):
     global question, category
+
     session = SessionLocal()
     try:
         new_question = Question(
-            question_id=call.message.message_id,
             user_id=call.from_user.id,
+            question_id=call.message.message_id,
+            chat_id=call.message.chat.id,
             question=question,
             category=category,
             status="pending",
             username=call.from_user.username
         )
-        message_id = call.message.message_id
-        admin_keyboard = create_admin_keyboard(message_id)
+        admin_keyboard = create_admin_keyboard(new_question.question_id)
         admin_message = bot.send_message(ADMIN_CHANNEL_ID, text=f"#{category}\n\n{question}\
         \n\nBy: {call.from_user.username}\n ``` Status: {new_question.status}```",
-                                         reply_markup=admin_keyboard, parse_mode="Markdown")
-        new_admin_message = AdminMessage(
-            user_message_id=message_id,
-            admin_message_id=admin_message.message_id
-        )
-        session.add(new_admin_message)
+                                         reply_markup=admin_keyboard,
+                                         parse_mode="Markdown")
+        new_question.admin_message_id = admin_message.message_id
+        # new_admin_message = AdminMessage(
+        #     user_message_id=new_question.message_id,
+        #     admin_message_id=admin_message.message_id
+        # )
+        # session.add(new_admin_message)
         session.add(new_question)
         session.commit()
         bot.send_message(call.message.chat.id, call.data)
@@ -178,7 +181,7 @@ reviewed by our team and published shortly",
         bot.edit_message_text(chat_id=call.message.chat.id,
                               message_id=call.message.message_id,
                               text=f"#{category}\n\n{question}\
-        \n\nBy: {username}\n ``` Status: {'pending'}```",
+        \n\nBy: {username}\n ``` Status: {question_data.status}```",
                               parse_mode="Markdown", reply_markup=keyboard)
 
         session.close()
@@ -198,11 +201,12 @@ def handle_resubmitted(call):
     \n\nBy: {call.from_user.username}\n ``` Status: {qst.status}```",
                                      reply_markup=admin_keyboard,
                                      parse_mode="Markdown")
-    new_admin_message = AdminMessage(
-        user_message_id=message_id,
-        admin_message_id=admin_message.message_id
-    )
-    session.add(new_admin_message)
+    qst.admin_message_id = admin_message.message_id
+    # new_admin_message = AdminMessage(
+    #     user_message_id=message_id,
+    #     admin_message_id=admin_message.message_id
+    # )
+    # session.add(new_admin_message)
     session.commit()
     bot.answer_callback_query(
         call.id,
@@ -235,20 +239,19 @@ def handle_cancelled(call):
 
     try:
         session = SessionLocal()
-        questionary = session.query(Question).\
-            filter_by(question_id=call.message.message_id).first()
-        if questionary:
-            stmt = select(Question).where(
-                Question.question_id == questionary.question_id)
-            qst = session.scalars(stmt).one()
-            qst.status = "cancelled"
-            question = qst.question
-            category = qst.category
-            admin_message = session.query(AdminMessage).\
-                filter_by(user_message_id=questionary.question_id).first()
-            if admin_message:
-                bot.delete_message(ADMIN_CHANNEL_ID, admin_message.admin_message_id)
-                session.delete(admin_message)
+        questionary = session.query(Question).get(call.message.message_id)
+        # questionary = session.query(Question).\
+        #     filter_by(question_id=call.message.message_id).first()
+        if questionary and questionary.status == "pending" and \
+           questionary.user_id == call.from_user.id:
+
+            questionary.status = "cancelled"
+            category = questionary.category
+            question = questionary.question
+            session.commit()
+            if questionary.admin_message_id:
+                bot.delete_message(ADMIN_CHANNEL_ID,
+                                   questionary.admin_message_id)
         else:
             new_question = Question(
                 question_id=call.message.message_id,
@@ -258,9 +261,8 @@ def handle_cancelled(call):
                 status="cancelled",
                 username=call.from_user.username
             )
-            print(new_question.category,
-                  new_question.question,
-                  new_question.status, new_question.username)
+            category = new_question.category
+            question = new_question.question
             session.add(new_question)
 
         session.commit()
@@ -271,24 +273,32 @@ def handle_cancelled(call):
         bot.edit_message_text(chat_id=call.message.chat.id,
                               message_id=call.message.message_id,
                               text=f"#{category}\n\n{question}\
-\n\nBy: {call.message.chat.username}\n ``` Status: {call.data}```",
+        \n\nBy: {call.from_user.username}\n ``` Status: Cancelled```",
                               parse_mode="Markdown", reply_markup=keyboard)
+
         bot.send_message(call.message.chat.id, "Cancelled")
         session.close()
 
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith(('approve', 'reject')))
+@bot.callback_query_handler(func=lambda call: call.data.startswith('approve'))
 def handle_admin_action(call):
+    print(call.data)
     session = SessionLocal()
     try:
         question_id = int(call.data.split('_')[-1])
-        question = session.query(Question).filter_by(id=question_id).first()
+        print(question_id)
+        question = session.query(Question).get(question_id)
+        if not question:
+            bot.answer_callback_query(call.id, "Question not found")
         if call.data.startswith('approve'):
             question.status = 'approved'
-            bot.send_message(question.user_id,
-                             "Your question has been approved and published")
-            bot.send_message(PUBLIC_CHANNEL_ID, f"#{question.category}\n\n{question.question}\
+            session.commit()
+            bot.send_message(PUBLIC_CHANNEL_ID,
+                             f"#{question.category}\n\n{question.question}\
             \n\nBy: {question.username}")
+            bot.send_message(chat_id=question.user_id,
+                             text="Your question has been approved",
+                             reply_to_message_id=question.question_id)
         elif call.data.startswith('reject'):
             question.status = 'rejected'
             bot.send_message(question.user_id,
