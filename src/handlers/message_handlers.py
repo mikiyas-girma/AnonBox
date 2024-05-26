@@ -96,7 +96,9 @@ choose 'Other' option```",
 
 def handle_category(message, question):
     if message.text == 'Cancel':
-        send_welcome(message)
+        bot.edit_message_text(chat_id=message.chat.id,
+                              message_id=message.message_id,
+                              text="Select an option")
         return
     global category
     category = message.text
@@ -230,12 +232,6 @@ def handle_cancelled(call):
     keyboard = InlineKeyboardMarkup()
     keyboard.row_width = 2
     keyboard.add(InlineKeyboardButton('Resubmit', callback_data='Resubmitted'))
-    bot.edit_message_text(chat_id=call.message.chat.id,
-                          message_id=call.message.message_id,
-                          text=f"#{category}\n\n{question}\
-\n\nBy: {call.message.chat.username}\n ``` Status: {call.data}```",
-                          parse_mode="Markdown", reply_markup=keyboard)
-    bot.send_message(call.message.chat.id, "Cancelled")
 
     try:
         session = SessionLocal()
@@ -246,6 +242,8 @@ def handle_cancelled(call):
                 Question.question_id == questionary.question_id)
             qst = session.scalars(stmt).one()
             qst.status = "cancelled"
+            question = qst.question
+            category = qst.category
             admin_message = session.query(AdminMessage).\
                 filter_by(user_message_id=questionary.question_id).first()
             if admin_message:
@@ -264,11 +262,18 @@ def handle_cancelled(call):
                   new_question.question,
                   new_question.status, new_question.username)
             session.add(new_question)
+
         session.commit()
     except Exception as e:
         session.rollback()
         print(e)
     finally:
+        bot.edit_message_text(chat_id=call.message.chat.id,
+                              message_id=call.message.message_id,
+                              text=f"#{category}\n\n{question}\
+\n\nBy: {call.message.chat.username}\n ``` Status: {call.data}```",
+                              parse_mode="Markdown", reply_markup=keyboard)
+        bot.send_message(call.message.chat.id, "Cancelled")
         session.close()
 
 
