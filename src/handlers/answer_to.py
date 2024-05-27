@@ -2,23 +2,24 @@ from main_bot import bot
 from telebot.types import (ReplyKeyboardMarkup, KeyboardButton,
                            InlineKeyboardButton, InlineKeyboardMarkup)
 from models.engine.storage import SessionLocal
-from models.user import User
 from models.question import Question
-from models.states import State
 from models.answer import Answer
+
+username = 'Anonymous'
+first_name = 'Anonymous'
+last_name = 'Anonymous'
 
 
 def answer_callback(message):
-    print("Message Object::")
-    print(message)
-    print(message.text)
+    global username
+
     if message.text.startswith('/start answer_'):
         keyboard = ReplyKeyboardMarkup(one_time_keyboard=True)
         keyboard.resize_keyboard = True
         keyboard.row_width = 1
         keyboard.add(KeyboardButton('Cancel'))
         question_id = int(message.text.split('_')[-1])
-        print(question_id)
+        # print(question_id)
         session = SessionLocal()
         try:
             question = session.query(Question).get(question_id)
@@ -32,14 +33,15 @@ def answer_callback(message):
                 the_question = bot.send_message(
                     chat_id=message.chat.id,
                     text=f"#{question.category}\n\n{question.question}\
-                \n\nBy: {question.username}\n ``` Status: {question.status}```",
+            \n\nBy: {username}\n ``` Status: {question.status}```",
                     reply_markup=kbd,
                     parse_mode="Markdown")
-                msg = bot.reply_to(the_question,
-                                   text="Send me your answer  ``` Note that you can send your answers \
-through voice messages, images, videos, and documents```",
-                                   parse_mode='Markdown',
-                                   reply_markup=keyboard)
+                msg = bot.reply_to(
+                    the_question,
+                    text="Send me your answer  ``` Note that you can send your\
+ answers through voice messages, images, videos, and documents```",
+                    parse_mode='Markdown',
+                    reply_markup=keyboard)
 
                 bot.register_next_step_handler(msg, process_answer,
                                                question_id)
@@ -53,9 +55,14 @@ through voice messages, images, videos, and documents```",
 
 
 def process_answer(message, question_id):
+    global username
 
     if message.text.startswith('/start answer_'):
         answer_callback(message)
+        return
+    elif message.text.startswith('/start browse_'):
+        from handlers.browse_anwers import browse_callback
+        browse_callback(message)
         return
     else:
         if message.text == 'Cancel':
@@ -74,17 +81,18 @@ def process_answer(message, question_id):
             answer=answer,
             status='draft',
             reputation=0,
-            username=message.from_user.username
+            username=username
         )
         anw_keyboard = create_answer_keyboard(answer_id=new_answer.answer_id)
 
         session.add(new_answer)
         session.commit()
         bot.send_message(message.chat.id,
-                         f"{new_answer.answer}\n\nBy: {new_answer.username}",
+                         f"{new_answer.answer}\n\nBy: {username}",
                          reply_markup=anw_keyboard)
-        bot.register_next_step_handler(message, process_post_answer,
-                                       new_answer.answer_id, message.message_id)
+        bot.register_next_step_handler(
+            message, process_post_answer,
+            new_answer.answer_id, message.message_id)
         from handlers.message_handlers import send_welcome
         send_welcome(message=message)
     except Exception as e:
@@ -112,6 +120,7 @@ through voice messages, images, videos, and documents```",
 
 
 def process_edit_answer(message, answer_id, original_message_id):
+    global username
     if message.text == 'Cancel':
         from handlers.message_handlers import send_welcome
         send_welcome(message)
@@ -128,10 +137,11 @@ def process_edit_answer(message, answer_id, original_message_id):
         print(e)
     finally:
         session = SessionLocal()
-        answer_data = session.query(Answer).filter_by(answer_id=answer_id).first()
+        answer_data = session.query(Answer)\
+            .filter_by(answer_id=answer_id).first()
         answer_data.status = 'draft'
         answer_data.answer = message.text
-        answer_data.username = message.from_user.username
+        answer_data.username = username
         anw_keyboard = create_answer_keyboard(answer_id=answer_id)
         bot.send_message(
             chat_id=message.chat.id,
@@ -139,13 +149,13 @@ def process_edit_answer(message, answer_id, original_message_id):
         )
         bot.send_message(
             chat_id=message.chat.id,
-            text=f"{answer_data.answer}\n\nBy: {answer_data.username}",
+            text=f"{answer_data.answer}\n\nBy: {username}",
             reply_markup=anw_keyboard
         )
         # bot.edit_message_text(
         #     chat_id=message.chat.id,
         #     message_id=original_message_id,
-        #     text=f"{answer_data.answer}\n\nBy: {answer_data.username}"
+        #     text=f"{answer_data.answer}\n\nBy: {username}"
         # )
         # bot.edit_message_reply_markup(
         #     chat_id=message.chat.id,

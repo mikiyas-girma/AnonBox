@@ -11,16 +11,37 @@ from models.admin_message import AdminMessage
 from telebot.types import Message, Chat
 import os
 from handlers.answer_to import answer_callback
+from handlers.browse_anwers import browse_callback
 
 ADMIN_CHANNEL_ID = os.getenv('ADMIN_CHANNEL_ID')
 PUBLIC_CHANNEL_ID = os.getenv('PUBLIC_CHANNEL_ID')
+
+username = 'Anonymous'
+first_name = 'Anonymous'
+last_name = 'Anonymous'
 
 
 @bot.message_handler(func=lambda message: message.text == 'Cancel')
 @bot.message_handler(commands=['start', 'hello'])
 def send_welcome(message):
+    global username, first_name, last_name
+    session = SessionLocal()
+    user = session.query(User).filter_by(telegram_id=message.chat.id).first()
+    if not user:
+        new_user = User(telegram_id=message.chat.id,
+                        username='Anonymous',
+                        first_name=first_name,
+                        last_name=last_name)
+        session.add(new_user)
+        session.commit()
+        session.close()
+    else:
+        session.close()
     if message.text.startswith('/start answer_'):
         answer_callback(message)
+        return
+    elif message.text.startswith('/start browse_'):
+        browse_callback(message)
         return
     session = SessionLocal()
     states = session.query(State).filter_by(user_id=message.chat.id).first()
@@ -100,6 +121,8 @@ choose 'Other' option```",
 
 
 def handle_category(message, question):
+    global username
+
     if message.text == 'Cancel':
         bot.edit_message_text(chat_id=message.chat.id,
                               message_id=message.message_id,
@@ -119,7 +142,7 @@ once you are done")
                  InlineKeyboardButton('Submit', callback_data='Submitted'))
 
     bot.send_message(message.chat.id, f"#{category}\n\n{question}\n\nBy: \
-{message.from_user.username}\n ``` Status: previewing```",
+{username}\n ``` Status: previewing```",
                      parse_mode="Markdown", reply_markup=keyboard)
 
 
@@ -135,7 +158,7 @@ def handle_edit_question(call):
 # submit question callback handler
 @bot.callback_query_handler(func=lambda call: call.data == 'Submitted')
 def handle_submit_question(call):
-    global question, category
+    global question, category, username
 
     session = SessionLocal()
     try:
@@ -146,11 +169,11 @@ def handle_submit_question(call):
             question=question,
             category=category,
             status="pending",
-            username=call.from_user.username
+            username=username
         )
         admin_keyboard = create_admin_keyboard(new_question.question_id)
         admin_message = bot.send_message(ADMIN_CHANNEL_ID, text=f"#{category}\n\n{question}\
-        \n\nBy: {call.from_user.username}\n ``` Status: {new_question.status}```",
+        \n\nBy: {username}\n ``` Status: {new_question.status}```",
                                          reply_markup=admin_keyboard,
                                          parse_mode="Markdown")
         new_question.admin_message_id = admin_message.message_id
@@ -182,7 +205,7 @@ reviewed by our team and published shortly",
             question_id=call.message.message_id).first()
         category = question_data.category
         question = question_data.question
-        username = question_data.username
+        username = username
         bot.edit_message_text(chat_id=call.message.chat.id,
                               message_id=call.message.message_id,
                               text=f"#{category}\n\n{question}\
@@ -194,6 +217,7 @@ reviewed by our team and published shortly",
 
 @bot.callback_query_handler(func=lambda call: call.data == 'Resubmitted')
 def handle_resubmitted(call):
+    global username
     session = SessionLocal()
     stmt = select(Question).where(
         Question.question_id == call.message.message_id)
@@ -203,7 +227,7 @@ def handle_resubmitted(call):
     message_id = call.message.message_id
     admin_keyboard = create_admin_keyboard(message_id)
     admin_message = bot.send_message(ADMIN_CHANNEL_ID, text=f"#{qst.category}\n\n{qst.question}\
-    \n\nBy: {call.from_user.username}\n ``` Status: {qst.status}```",
+    \n\nBy: {username}\n ``` Status: {qst.status}```",
                                      reply_markup=admin_keyboard,
                                      parse_mode="Markdown")
     qst.admin_message_id = admin_message.message_id
@@ -223,7 +247,7 @@ reviewed by our team and published shortly",
         question_id=call.message.message_id).first()
     category = question_data.category
     question = question_data.question
-    username = question_data.username
+    username = username
     keyboard = InlineKeyboardMarkup()
     keyboard.row_width = 2
     keyboard.add(InlineKeyboardButton('Cancel', callback_data='Cancelled'))
@@ -237,7 +261,7 @@ reviewed by our team and published shortly",
 
 @bot.callback_query_handler(func=lambda call: call.data == 'Cancelled')
 def handle_cancelled(call):
-    global question, category
+    global question, category, username
     keyboard = InlineKeyboardMarkup()
     keyboard.row_width = 2
     keyboard.add(InlineKeyboardButton('Resubmit', callback_data='Resubmitted'))
@@ -264,7 +288,7 @@ def handle_cancelled(call):
                 question=question,
                 category=category,
                 status="cancelled",
-                username=call.from_user.username
+                username=username
             )
             category = new_question.category
             question = new_question.question
@@ -278,7 +302,7 @@ def handle_cancelled(call):
         bot.edit_message_text(chat_id=call.message.chat.id,
                               message_id=call.message.message_id,
                               text=f"#{category}\n\n{question}\
-        \n\nBy: {call.from_user.username}\n ``` Status: Cancelled```",
+        \n\nBy: {username}\n ``` Status: Cancelled```",
                               parse_mode="Markdown", reply_markup=keyboard)
 
         bot.send_message(call.message.chat.id, "Cancelled")
@@ -287,6 +311,7 @@ def handle_cancelled(call):
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('approve'))
 def handle_admin_action(call):
+    global username
     session = SessionLocal()
     try:
         question_id = int(call.data.split('_')[-1])
@@ -302,12 +327,12 @@ def handle_admin_action(call):
             user_keyboard = create_answer_keyboard(question.question_id)
             bot.send_message(PUBLIC_CHANNEL_ID,
                              f"#{question.category}\n\n{question.question}\
-            \n\nBy: {question.username}", reply_markup=user_keyboard)
+            \n\nBy: {username}", reply_markup=user_keyboard)
 
             bot.send_message(
                 chat_id=question.user_id,
                 text=f"#{question.category}\n\n{question.question}\
-                \n\nBy: {question.username}\n ``` Status: {question.status}```\
+                \n\nBy: {username}\n ``` Status: {question.status}```\
                 ",
                 reply_to_message_id=question.question_id,
                 reply_markup=user_keyboard,
@@ -317,7 +342,7 @@ def handle_admin_action(call):
                 chat_id=question.chat_id,
                 message_id=question.question_id,
                 text=f"#{question.category}\n\n{question.question}\
-                \n\nBy: {question.username}\n ``` Status: {question.status}```\
+                \n\nBy: {username}\n ``` Status: {question.status}```\
                 ",
                 parse_mode="Markdown")
 
@@ -329,7 +354,7 @@ def handle_admin_action(call):
             bot.edit_message_text(chat_id=ADMIN_CHANNEL_ID,
                                   message_id=question.admin_message_id,
                                   text=f"#{question.category}\n\n{question.question}\
-            \n\nBy: {question.username}\n ``` Status: {question.status}```",
+            \n\nBy: {username}\n ``` Status: {question.status}```",
                                   parse_mode="Markdown", reply_markup=keyboard)
 
         elif call.data.startswith('reject'):
@@ -346,6 +371,7 @@ def handle_admin_action(call):
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('reject'))
 def handle_reject(call):
+    global username
     session = SessionLocal()
     try:
         question_id = int(call.data.split('_')[-1])
@@ -364,12 +390,12 @@ def handle_reject(call):
         bot.edit_message_text(chat_id=question.chat_id,
                               message_id=question.question_id,
                               text=f"#{question.category}\n\n{question.question}\
-            \n\nBy: {question.username}\n ``` Status: {question.status}```",
+            \n\nBy: {username}\n ``` Status: {question.status}```",
                               parse_mode="Markdown")
         bot.edit_message_text(chat_id=ADMIN_CHANNEL_ID,
                               message_id=question.admin_message_id,
                               text=f"#{question.category}\n\n{question.question}\
-        \n\nBy: {question.username}\n ``` Status: {question.status}```",
+        \n\nBy: {username}\n ``` Status: {question.status}```",
                               parse_mode="Markdown", reply_markup=keyboard)
         session.commit()
     except Exception as e:
@@ -403,44 +429,6 @@ def create_answer_keyboard(question_id):
     )
     keyboard.add(answer_button, browse_button)
     return keyboard
-
-
-@bot.message_handler(commands=['register'])
-def register(message):
-    session = SessionLocal()
-    user = session.query(User).\
-        filter_by(telegram_id=message.from_user.id).first()
-
-    if user:
-        bot.reply_to(message, "You are already registered")
-    else:
-        new_user = User(
-            telegram_id=message.from_user.id,
-            username=message.from_user.username,
-            first_name=message.from_user.first_name,
-            last_name=message.from_user.last_name
-        )
-
-        session.add(new_user)
-        session.commit()
-        bot.reply_to(message, "You have been registered")
-
-    session.close()
-
-
-@bot.message_handler(commands=['list'])
-def list_users(message):
-    session = SessionLocal()
-    users = session.query(User).all()
-
-    if users:
-        users_list = '\n'.join([f" {user.username} - {user.first_name} -"
-                                f"{user.last_name}" for user in users])
-        bot.reply_to(message, f"Registered users:\n{users_list}")
-    else:
-        bot.reply_to(message, "No users found")
-
-    session.close()
 
 
 @bot.message_handler(content_types=['photo'])
