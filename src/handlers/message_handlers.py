@@ -12,6 +12,7 @@ from telebot.types import Message, Chat
 import os
 from handlers.answer_to import answer_callback
 from handlers.browse_anwers import browse_callback
+from models.answer import Answer
 
 ADMIN_CHANNEL_ID = os.getenv('ADMIN_CHANNEL_ID')
 PUBLIC_CHANNEL_ID = os.getenv('PUBLIC_CHANNEL_ID')
@@ -171,7 +172,7 @@ def handle_submit_question(call):
             question=question,
             category=category,
             status="pending",
-            name=name
+            username=name
         )
         admin_keyboard = create_admin_keyboard(new_question.question_id)
         admin_message = bot.send_message(ADMIN_CHANNEL_ID, text=f"#{category}\n\n{question}\
@@ -290,7 +291,7 @@ def handle_cancelled(call):
                 question=question,
                 category=category,
                 status="cancelled",
-                name=name
+                username=name
             )
             category = new_question.category
             question = new_question.question
@@ -419,6 +420,10 @@ def create_admin_keyboard(question_id):
 
 
 def create_answer_keyboard(question_id):
+    session = SessionLocal()
+    answer_count = session.query(Answer).filter_by(
+        question_id=question_id, status='posted').count()
+    session.close()
     keyboard = InlineKeyboardMarkup()
     keyboard.row_width = 2
     answer_button = InlineKeyboardButton(
@@ -426,7 +431,7 @@ def create_answer_keyboard(question_id):
         url=f"https://t.me/{bot.get_me().username}?start=answer_{question_id}"
         )
     browse_button = InlineKeyboardButton(
-        "Browse (5)",
+        f"Browse {answer_count}",
         url=f"https://t.me/{bot.get_me().username}?start=browse_{question_id}"
     )
     keyboard.add(answer_button, browse_button)
