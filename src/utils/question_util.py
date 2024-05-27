@@ -5,11 +5,16 @@ import os
 import logging
 
 
+username = 'Anonymous'
+first_name = 'Anonymous'
+last_name = 'Anonymous'
+
 ADMIN_CHANNEL_ID = os.getenv('ADMIN_CHANNEL_ID')
 PUBLIC_CHANNEL_ID = os.getenv('PUBLIC_CHANNEL_ID')
 
 
 def send_pending_questions():
+    global username
     from handlers.message_handlers import create_admin_keyboard
     session = SessionLocal()
     try:
@@ -17,7 +22,7 @@ def send_pending_questions():
         for question in pending_questions:
             keyboard = create_admin_keyboard(question.question_id)
             sent_message = bot.send_message(ADMIN_CHANNEL_ID, text=f"#{question.category}\n\n{question.question}\
-        \n\nBy: {question.username}\n ``` Status: {question.status}```",
+        \n\nBy: {username}\n ``` Status: {question.status}```",
                                             reply_markup=keyboard,
                                             parse_mode="Markdown")
             question.message_id = sent_message.message_id

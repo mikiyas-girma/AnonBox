@@ -6,7 +6,8 @@ class User(Base):
     __tablename__ = 'users'
     telegram_id = Column(BigInteger, primary_key=True, unique=True,
                          nullable=False)
-    username = Column(String, unique=True, index=True, default='Anonymous')
+    name = Column(String, nullable=False, default='Anonymous')
+    username = Column(String, unique=True, index=True)
     gender = Column(String, default=None)
     bio = Column(String, default=None)
     reputation = Column(Integer, default=0)
