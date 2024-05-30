@@ -191,7 +191,8 @@ def handle_submit_question(call):
         # session.add(new_admin_message)
         session.add(new_question)
         session.commit()
-        bot.send_message(call.message.chat.id, call.data)
+        bot.send_message(call.message.chat.id, "Submitted")
+        send_welcome(call.message)
 
     except Exception as e:
         session.rollback()
@@ -310,6 +311,8 @@ def handle_resubmitted(call):
         \n\nBy: {name}\n ``` Status: {question.status}```",
                                      reply_markup=admin_keyboard,
                                      parse_mode="Markdown")
+        question.admin_message_id = admin_msg.message_id
+        session.commit()
 
         keyboard = InlineKeyboardMarkup()
         keyboard.row_width = 2
@@ -366,7 +369,7 @@ def handle_admin_action(call):
                 parse_mode="Markdown")
 
             bot.edit_message_text(
-                chat_id=question.chat_id,
+                chat_id=question.user_id,
                 message_id=question.question_id,
                 text=f"#{question.category}\n\n{question.question}\
                 \n\nBy: {name}\n ``` Status: {question.status}```\
