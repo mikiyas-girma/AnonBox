@@ -5,7 +5,7 @@ from models.engine.storage import SessionLocal
 from models.question import Question
 from models.answer import Answer
 
-username = 'Anonymous'
+name = 'Anonymous'
 first_name = 'Anonymous'
 last_name = 'Anonymous'
 
@@ -19,7 +19,7 @@ if bot.callback_query_handler is None:
 
 
 def answer_callback(message):
-    global username
+    global name
 
     if message.text.startswith('/start answer_'):
         keyboard = ReplyKeyboardMarkup(one_time_keyboard=True)
@@ -41,7 +41,7 @@ def answer_callback(message):
                 the_question = bot.send_message(
                     chat_id=message.chat.id,
                     text=f"#{question.category}\n\n{question.question}\
-            \n\nBy: {username}\n ``` Status: {question.status}```",
+            \n\nBy: {name}\n ``` Status: {question.status}```",
                     reply_markup=kbd,
                     parse_mode="Markdown")
                 msg = bot.reply_to(
@@ -63,7 +63,7 @@ def answer_callback(message):
 
 
 def process_answer(message, question_id):
-    global username
+    global name
 
     if message.text.startswith('/start answer_'):
         answer_callback(message)
@@ -85,18 +85,18 @@ def process_answer(message, question_id):
             answer_id=message.message_id,
             question_id=question_id,
             user_id=message.from_user.id,
+            username=message.from_user.username,
             chat_id=message.chat.id,
             answer=answer,
             status='draft',
             reputation=0,
-            username=username
         )
         anw_keyboard = create_answer_keyboard(answer_id=new_answer.answer_id)
 
         session.add(new_answer)
         session.commit()
         bot.send_message(message.chat.id,
-                         f"{new_answer.answer}\n\nBy: {username}",
+                         f"{new_answer.answer}\n\nBy: {name}",
                          reply_markup=anw_keyboard)
         bot.register_next_step_handler(
             message, process_post_answer,
@@ -128,7 +128,7 @@ through voice messages, images, videos, and documents```",
 
 
 def process_edit_answer(message, answer_id, original_message_id):
-    global username
+    global name
     if message.text == 'Cancel':
         from handlers.message_handlers import send_welcome
         send_welcome(message)
@@ -149,7 +149,7 @@ def process_edit_answer(message, answer_id, original_message_id):
             .filter_by(answer_id=answer_id).first()
         answer_data.status = 'draft'
         answer_data.answer = message.text
-        answer_data.username = username
+        answer_data.username = name
         anw_keyboard = create_answer_keyboard(answer_id=answer_id)
         bot.send_message(
             chat_id=message.chat.id,
@@ -157,7 +157,7 @@ def process_edit_answer(message, answer_id, original_message_id):
         )
         bot.send_message(
             chat_id=message.chat.id,
-            text=f"{answer_data.answer}\n\nBy: {username}",
+            text=f"{answer_data.answer}\n\nBy: {name}",
             reply_markup=anw_keyboard
         )
         # bot.edit_message_text(
