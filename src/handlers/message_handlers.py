@@ -362,7 +362,7 @@ def handle_admin_action(call):
             question.public_message_id = public_msg.message_id
             session.commit()
 
-            bot.send_message(
+            notify = bot.send_message(
                 chat_id=question.user_id,
                 text=f"#{question.category}\n\n{question.question}\
                 \n\nBy: {name}\n ``` Status: {question.status}```\
@@ -397,6 +397,11 @@ def handle_admin_action(call):
             if question.public_message_id:
                 bot.delete_message(PUBLIC_CHANNEL_ID,
                                    question.public_message_id)
+                bot.edit_message_text(chat_id=question.user_id,
+                                      message_id=notify.message_id,
+                                      text=f"#{question.category}\n\n{question.question}\
+                                      \n\nBy: {name}\n ``` Status: {question.status}```",
+                                      parse_mode="Markdown")
         session.commit()
     except Exception as e:
         session.rollback()
@@ -410,9 +415,14 @@ def handle_reject(call):
     global name
     session = SessionLocal()
     try:
-        question_id = int(call.data.split('_')[1])
-        public_msg_id = int(call.data.split('_')[2])
-        print("from call data: ", question_id)
+        args = call.data.split('_')
+        if len(args) == 3:
+            question_id = int(args[1])
+            public_msg_id = int(args[2])
+        else:
+            question_id = int(args[1])
+            public_msg_id = None
+        print("from call data with reject : ", question_id, public_msg_id)
         question = session.query(Question).get(question_id)
         if not question:
             bot.answer_callback_query(call.id, "Question not found")
