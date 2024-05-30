@@ -18,6 +18,7 @@ def browse_callback(message):
     print(message.text)
     if message.text.startswith('/start browse_'):
         question_id = int(message.text.split('_')[-1])
+        print("browse this: ", question_id)
         session = SessionLocal()
         try:
             # the question
@@ -26,9 +27,10 @@ def browse_callback(message):
                 print("Question found")
                 print(question.question)
                 kbd = InlineKeyboardMarkup()
-                kbd.row_width = 2
+                kbd.row_width = 4
                 kbd.add(InlineKeyboardButton(
-                    'Answer', callback_data=f'answer_{question_id}'),
+                    'Answer',
+                    url=f"https://t.me/{bot.get_me().username}?start=answer_{question_id}"),
                         InlineKeyboardButton(
                             'Subscribe', callback_data='subscribe'))
                 bot.send_message(

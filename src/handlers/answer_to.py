@@ -37,7 +37,8 @@ def answer_callback(message):
                 kbd = InlineKeyboardMarkup()
                 kbd.row_width = 2
                 kbd.add(InlineKeyboardButton(
-                    'Browse (5)', callback_data=f'browse_{question_id}'),
+                    'Browse (5)',
+                    url=f"https://t.me/{bot.get_me().username}?start=browse_{question_id}"),
                         InlineKeyboardButton(
                             'Subscribe', callback_data='subscribe'))
                 the_question = bot.send_message(
