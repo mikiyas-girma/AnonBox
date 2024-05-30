@@ -325,7 +325,6 @@ def handle_resubmitted(call):
             "Your question has been Resubmitted for approval! it will be \
 reviewed by our team and published shortly",
             show_alert=True)
-        print("passed to delete if cancalled id: ", question.admin_message_id)
         bot.edit_message_text(chat_id=call.message.chat.id,
                               message_id=call.message.message_id,
                               text=f"#{question.category}\n\n{question.question}\
