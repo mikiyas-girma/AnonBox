@@ -10,7 +10,7 @@ CHECKED = '✅'
 UNCHECKED = ' '
 
 
-@bot.message_handler(func=lambda message: message.text == 'Browse Questions')
+@bot.message_handler(func=lambda message: message.text == '🙋‍♂️Browse Questions')
 def questions(message):
     session = SessionLocal()
     states = session.query(State).filter_by(user_id=message.chat.id).first()

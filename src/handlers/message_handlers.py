@@ -36,8 +36,8 @@ def send_welcome(message):
                         username=message.from_user.username,
                         first_name=first_name,
                         last_name=last_name,
-                        name=name,
-                        date_joined=message.date)
+                        name=name
+                        )
         session.add(new_user)
         session.commit()
         session.close()
@@ -64,19 +64,19 @@ def send_welcome(message):
     keyboard = ReplyKeyboardMarkup()
     keyboard.resize_keyboard = True
     keyboard.row_width = 2
-    keyboard.add(KeyboardButton('Ask a question'),
-                 KeyboardButton('Search questions'),
-                 KeyboardButton('Browse Questions'),
-                 KeyboardButton('Trending Answers'),
-                 KeyboardButton('Profile'),
-                 KeyboardButton('Leaderboard'),
-                 KeyboardButton('More'))
+    keyboard.add(KeyboardButton('📝 Ask a question'),
+                 KeyboardButton('🔍 Search questions'),
+                 KeyboardButton('🙋‍♂️Browse Questions'),
+                 KeyboardButton('📈 Trending Answers'),
+                 KeyboardButton('👤 Profile'),
+                 KeyboardButton('🏆 Leaderboard'),
+                 KeyboardButton('➡️ More'))
 
     bot.send_message(message.chat.id, "Select an option",
                      reply_markup=keyboard)
 
 
-@bot.message_handler(func=lambda message: message.text == 'Ask a question')
+@bot.message_handler(func=lambda message: message.text == '📝 Ask a question')
 def handle_ask_question(message):
     keyboard = ReplyKeyboardMarkup(one_time_keyboard=True)
     keyboard.resize_keyboard = True
