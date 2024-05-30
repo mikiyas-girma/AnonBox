@@ -255,7 +255,9 @@ def handle_cancelled(call):
 
             questionary.status = "cancelled"
             session.commit()
+            print("deleting from admin channel")
             bot.delete_message(ADMIN_CHANNEL_ID, admin_msg)
+            print("deleted from admin")
         else:
             new_question = Question(
                 question_id=message_id,
@@ -320,6 +322,7 @@ def handle_resubmitted(call):
             "Your question has been Resubmitted for approval! it will be \
 reviewed by our team and published shortly",
             show_alert=True)
+        print("passed to delete if cancalled id: ", question.admin_message_id)
         bot.edit_message_text(chat_id=call.message.chat.id,
                               message_id=call.message.message_id,
                               text=f"#{question.category}\n\n{question.question}\
