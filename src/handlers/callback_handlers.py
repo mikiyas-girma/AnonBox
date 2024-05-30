@@ -4,6 +4,8 @@ from telebot.types import (InlineKeyboardMarkup,
                            SwitchInlineQueryChosenChat)
 from telebot.util import quick_markup
 
+bot = bot.bot
+
 
 @bot.message_handler(commands=['social'])
 def list_social_media(message):

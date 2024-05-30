@@ -4,6 +4,8 @@ import logging
 from telebot import types
 from main_bot import bot
 
+bot = bot.bot
+
 
 @bot.inline_handler(lambda query: query.query == 'miki')
 def query_text(inline_query):

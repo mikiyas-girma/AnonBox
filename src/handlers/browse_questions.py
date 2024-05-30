@@ -4,6 +4,8 @@ from telebot.types import (ReplyKeyboardMarkup, KeyboardButton,  # noqa
 from models.engine.storage import SessionLocal
 from models.states import State
 
+bot = bot.bot
+
 CHECKED = '✅'
 UNCHECKED = ' '
 

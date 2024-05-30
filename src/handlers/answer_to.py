@@ -9,6 +9,8 @@ name = 'Anonymous'
 first_name = 'Anonymous'
 last_name = 'Anonymous'
 
+bot = bot.bot
+
 # Check if the bot object is None
 if bot is None:
     print("The bot object is None")
@@ -230,7 +232,7 @@ def create_answer_keyboard(answer_id):
         InlineKeyboardButton(
         'Notify Settings', callback_data='notify'),
         InlineKeyboardButton(
-        'Cancel', callback_data='cancel'),
+        'Cancel', callback_data=f'cancel_{answer_id}'),
         InlineKeyboardButton(
         'Post', callback_data=f'post_{answer_id}')
         )

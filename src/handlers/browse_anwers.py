@@ -5,6 +5,8 @@ from models.engine.storage import SessionLocal
 from models.question import Question
 from models.answer import Answer
 
+bot = bot.bot
+
 username = 'Anonymous'
 first_name = 'Anonymous'
 last_name = 'Anonymous'
