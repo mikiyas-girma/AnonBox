@@ -13,3 +13,4 @@ class Question(Base):
     username = Column(String, nullable=False)
     name = Column(String, nullable=False)
     admin_message_id = Column(BigInteger, nullable=True)
+    public_message_id = Column(BigInteger, nullable=True)
