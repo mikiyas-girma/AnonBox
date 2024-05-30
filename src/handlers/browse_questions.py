@@ -1,9 +1,7 @@
 from main_bot import bot
-from telebot.types import (ReplyKeyboardMarkup, KeyboardButton,
-                           InlineKeyboardButton, InlineKeyboardMarkup)
+from telebot.types import (ReplyKeyboardMarkup, KeyboardButton,  # noqa
+                           InlineKeyboardButton, InlineKeyboardMarkup)  # noqa
 from models.engine.storage import SessionLocal
-from models.user import User
-from models.question import Question
 from models.states import State
 
 CHECKED = '✅'
@@ -56,10 +54,10 @@ def callback_query(call):
     keyboard.add(
         InlineKeyboardButton(
             f'{CHECKED if states.question_type == "Popular" else UNCHECKED} \
-Popular', callback_data='Popular'),
+  Popular', callback_data='Popular'),
         InlineKeyboardButton(
-            f'{CHECKED if states.question_type == "Unanswered" else UNCHECKED} \
-Unanswered', callback_data='Unanswered'),
+            f'{CHECKED if states.question_type == "Unanswered" else UNCHECKED}\
+  Unanswered', callback_data='Unanswered'),
         InlineKeyboardButton('Category - Tech', callback_data='Category'),
         InlineKeyboardButton('Timeframe - Today', callback_data='Timeframe'))
     bot.edit_message_text('Browse Questions', call.message.chat.id,

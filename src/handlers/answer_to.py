@@ -9,6 +9,14 @@ username = 'Anonymous'
 first_name = 'Anonymous'
 last_name = 'Anonymous'
 
+# Check if the bot object is None
+if bot is None:
+    print("The bot object is None")
+
+# Check if the callback_query_handler method is None
+if bot.callback_query_handler is None:
+    print("The callback_query_handler method is None")
+
 
 def answer_callback(message):
     global username

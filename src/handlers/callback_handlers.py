@@ -8,7 +8,9 @@ from telebot.util import quick_markup
 @bot.message_handler(commands=['social'])
 def list_social_media(message):
     markup = quick_markup({
-            'Twitter': {'url': 'https://t.me/botethiopia_bot', 'callback_data': 'inBot'},
+            'Twitter': {
+                'url': 'https://t.me/botethiopia_bot',
+                'callback_data': 'inBot'},
             'Facebook': {'url': 'https://facebook.com'},
             'Confirm': {'callback_data': 'confirm'},
         }, row_width=2)
