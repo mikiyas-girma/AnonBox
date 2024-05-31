@@ -4,6 +4,7 @@ from telebot.types import (ReplyKeyboardMarkup, KeyboardButton,
 from models.engine.storage import SessionLocal
 from models.question import Question
 from models.answer import Answer
+from models.asked import Asked
 
 name = 'Anonymous'
 first_name = 'Anonymous'
@@ -25,6 +26,8 @@ def answer_callback(message):
         session = SessionLocal()
         try:
             question = session.query(Question).get(question_id)
+            asked_query = session.query(Asked).filter_by(
+                question_id=question_id).first()
             if question:
                 kbd = InlineKeyboardMarkup()
                 kbd.row_width = 2
@@ -35,7 +38,7 @@ def answer_callback(message):
                             'Subscribe', callback_data='subscribe'))
                 the_question = bot.send_message(
                     chat_id=message.chat.id,
-                    text=f"#{question.category}\n\n{question.question}\
+                    text=f"#{asked_query.question_category}\n\n{asked_query.user_question}\
             \n\nBy: {name}\n ``` Status: {question.status}```",
                     reply_markup=kbd,
                     parse_mode="Markdown")

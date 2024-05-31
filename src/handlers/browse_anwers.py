@@ -4,7 +4,8 @@ from telebot.types import (ReplyKeyboardMarkup, KeyboardButton,
 from models.engine.storage import SessionLocal
 from models.question import Question
 from models.answer import Answer
-
+from models.asked import Asked
+from models.user_reaction import UserReaction
 bot = bot.bot
 
 username = 'Anonymous'
@@ -23,6 +24,8 @@ def browse_callback(message):
         try:
             # the question
             question = session.query(Question).get(question_id)
+            asked_query = session.query(Asked).filter_by(
+                question_id=question_id).first()
             if question:
                 print("Question found")
                 print(question.question)
@@ -35,7 +38,7 @@ def browse_callback(message):
                             'Subscribe', callback_data='subscribe'))
                 bot.send_message(
                     chat_id=message.chat.id,
-                    text=f"#{question.category}\n\n{question.question}\
+                    text=f"#{asked_query.question_category}\n\n{asked_query.user_question}\
             \n\nBy: {username}\n ``` Status: {question.status}```",
                     reply_markup=kbd,
                     parse_mode="Markdown")
@@ -62,14 +65,39 @@ def browse_callback(message):
 
 
 def create_anw_key(answer_id):
+    session = SessionLocal()
+    my_ans = session.query(Answer).get(answer_id)
+    likes = my_ans.likes
+    dislikes = my_ans.dislikes
     keyboard = InlineKeyboardMarkup()
     keyboard.row_width = 4
     keyboard.add(InlineKeyboardButton(
-        ' ✅ ', callback_data=f'like_{answer_id}'),
+        f' ✅ {likes} ', callback_data=f'like_{answer_id}'),
         InlineKeyboardButton(
-            ' ❌ ', callback_data=f'dislike_{answer_id}'),
+            f' ❌ {dislikes} ', callback_data=f'dislike_{answer_id}'),
         InlineKeyboardButton(
             ' ⚠️ ', callback_data=f'comment_{answer_id}'),
         InlineKeyboardButton(
-            ' ↩️ ', callback_data=f'share_{answer_id}'))
+            ' ↩️ ', callback_data=f'replyto_{answer_id}'))
     return keyboard
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('like_'))
+def on_answer(call):
+    """
+    Handle callback queries on each answers
+    """
+    answer_id = int(call.data.split('_')[-1])
+    session = SessionLocal()
+    try:
+        new_reaction = UserReaction(
+            user_id=call.message.chat.id,
+            answer_id=answer_id,
+            reaction_type='liked'
+        )
+        session.add(new_reaction)
+        session.commit()
+    except Exception as e:
+        print(e)
+    finally:
+        session.close()

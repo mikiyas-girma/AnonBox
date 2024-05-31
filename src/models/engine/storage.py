@@ -12,6 +12,6 @@ Base = declarative_base()
 
 
 def init_db():
-    from models import question, answer, user, asked
+    from models import question, answer, user, asked, user_reaction
     Base.metadata.create_all(bind=engine)
     return engine
