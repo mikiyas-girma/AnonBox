@@ -4,7 +4,7 @@ from flask import Flask, request
 from handlers import (message_handlers, inline_handlers,
                       callback_handlers, browse_questions,
                       answer_to, browse_anwers, profile,
-                      )
+                      about)
 from utils import keyboards  # noqa
 from models.engine.storage import init_db
 
