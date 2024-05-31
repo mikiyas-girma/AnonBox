@@ -6,6 +6,7 @@ from models.user import User
 from sqlalchemy import func
 from models.question import Question
 from models.answer import Answer
+from handlers.message_handlers import send_welcome, create_answer_keyboard
 
 name = 'Anonymous'
 first_name = 'Anonymous'
@@ -45,8 +46,8 @@ def profile(message):
     keyboard = create_profile_keyboard(user.telegram_id)
 
     bot.send_message(message.chat.id,
-                     text=f'<b>{name } | {reputation} reps | 1\
- followers | {followers} following {following}</b>\n\nAsked {num_questions} Questions,\
+                     text=f'<b>{name } | {reputation} reps | \
+ {followers} followers | {following} following</b>\n\nAsked {num_questions} Questions,\
  <em>Answered {num_answered} Questions, Joined {date_joined} </em>\
                         \n\n<b>Bio:</b> {user.bio}',
                      parse_mode='HTML',
@@ -59,13 +60,13 @@ def create_profile_keyboard(profile_id):
         '📝 Edit Profile',
         callback_data=f'EditProfile_{profile_id}'))
     keyboard.row(InlineKeyboardButton('🤔 My Questions',
-                                      callback_data='Questions'),
+                                      callback_data=f'Questions_{profile_id}'),
                  InlineKeyboardButton('🙋‍♂️ My Answers',
-                                      callback_data='Answers'))
+                                      callback_data=f'Answers_{profile_id}'))
     keyboard.row(InlineKeyboardButton('👥 Followers',
-                                      callback_data='Followers'),
+                                      callback_data=f'Followers_{profile_id}'),
                  InlineKeyboardButton('👣 Followings',
-                                      callback_data='Following'))
+                                      callback_data=f'Following_{profile_id}'))
     keyboard.add(InlineKeyboardButton('⚙️ Settings', callback_data='Settings'))
     return keyboard
 
@@ -89,7 +90,7 @@ def create_edit_profile_keyboard(profile_id):
     keyboard.row(InlineKeyboardButton('Edit Gender',
                                       callback_data=f'EditGender_{profile_id}'))
     keyboard.row(InlineKeyboardButton('🔙 Back',
-                                      callback_data='👤 Profile'))
+                                      callback_data='Back_to_Profile'))
     return keyboard
 
 
@@ -110,6 +111,8 @@ def process_name_step(message):
         session.commit()
         session.close()
         bot.send_message(message.chat.id, 'Name updated successfully!')
+        profile(message)
+        return send_welcome(message)
     except Exception as e:
         bot.send_message(
             message.chat.id, 'An error occurred. Please try again later.')
@@ -133,6 +136,8 @@ def process_bio_step(message):
         session.commit()
         session.close()
         bot.send_message(message.chat.id, 'Bio updated successfully!')
+        profile(message)
+        return send_welcome(message)
     except Exception as e:
         bot.send_message(
             message.chat.id, 'An error occurred. Please try again later.')
@@ -163,7 +168,10 @@ def handle_gender(call):
             user.gender = gender
             session.commit()
             session.close()
-            bot.send_message(call.message.chat.id, 'Gender updated successfully!')
+            bot.send_message(call.message.chat.id,
+                             'Gender updated successfully!')
+            profile(call.message)
+            return send_welcome(call.message)
         else:
             bot.send_message(
                 call.message.chat.id, 'Invalid')
@@ -171,3 +179,42 @@ def handle_gender(call):
         bot.send_message(
             call.message.chat.id, 'An error occurred. Please try again later.')
         session.close()
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'Back_to_Profile')
+def back_to_profile(call):
+    profile(call.message)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('Questions_'))
+def my_questions(call):
+    user_id = call.data.split('_')[1]
+    print('My Questions id: ', user_id)
+    session = SessionLocal()
+    questions = session.query(Question).filter_by(user_id=user_id).all()
+    if not questions:
+        bot.send_message(call.message.chat.id, 'No questions found')
+        return profile(call.message)
+    for question in questions:
+        keyboard = None
+        if question.status == 'approved':
+            keyboard = create_answer_keyboard(question.question_id)
+        if question.status == 'pending':
+            keyboard = InlineKeyboardMarkup()
+            keyboard.add(
+                InlineKeyboardButton(
+                    'Cancel',
+                    callback_data=f'Cancelled_{question.question_id}_{question.category}_\
+                        {question.question}_{question.admin_message_id}'))
+        if question.status == 'cancelled':
+            keyboard = InlineKeyboardMarkup()
+            keyboard.add(
+                InlineKeyboardButton(
+                    'Resubmit',
+                    callback_data=f'Resubmitted_{question.question_id}'))
+        bot.answer_callback_query(call.id,
+                                  'Your questions',
+                                  show_alert=True)
+        bot.send_message(call.message.chat.id, f"#{question.category}\
+\n\n{question.question}\n\nBy: {name}\n ``` Status: {question.status}```",
+                         parse_mode="Markdown", reply_markup=keyboard)

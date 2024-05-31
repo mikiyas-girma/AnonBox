@@ -203,7 +203,8 @@ def handle_submit_question(call):
         keyboard.add(
             InlineKeyboardButton(
                 'Cancel',
-                callback_data=f"Cancelled_{call.message.message_id}_{category}_{question}_{admin_msg.message_id}"))
+                callback_data=f"Cancelled_{call.message.message_id}_{category}_\
+                    {question}_{admin_msg.message_id}"))
         bot.answer_callback_query(
             call.id,
             "Your question has been submitted for approval! it will be \
