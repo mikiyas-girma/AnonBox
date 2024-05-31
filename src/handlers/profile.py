@@ -218,3 +218,40 @@ def my_questions(call):
         bot.send_message(call.message.chat.id, f"#{question.category}\
 \n\n{question.question}\n\nBy: {name}\n ``` Status: {question.status}```",
                          parse_mode="Markdown", reply_markup=keyboard)
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('Followers_'))
+def my_followers(call):
+    """
+    handler for getting peoples who follows me
+    """
+    text = '<b>0 Followers </b> \n\n \
+------------------------ \n \
+You don\'t have any followers yet. \n \
+------------------------'
+    bot.answer_callback_query(call.id, 'Followers', show_alert=False)
+    keyboard = back_keyboard()
+    bot.send_message(call.message.chat.id, text,
+                     reply_markup=keyboard, parse_mode='HTML')
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('Following_'))
+def my_followings(call):
+    """
+    handler for getting peoples who follows me
+    """
+    text = '<b>0 Followings </b> \n\n \
+------------------------ \n \
+You don\'t follow any one yet. \n \
+------------------------'
+    bot.answer_callback_query(call.id, 'Followings', show_alert=False)
+    keyboard = back_keyboard()
+    bot.send_message(call.message.chat.id, text,
+                     reply_markup=keyboard,
+                     parse_mode='HTML')
+
+
+def back_keyboard():
+    keyboard = InlineKeyboardMarkup()
+    keyboard.add(InlineKeyboardButton('🔙 Back', callback_data='Back_to_Profile'))
+    return keyboard
