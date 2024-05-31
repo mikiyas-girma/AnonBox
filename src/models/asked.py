@@ -8,3 +8,4 @@ class Asked(Base):
     question_id = Column(BigInteger, primary_key=True)
     user_question = Column(String(300))
     question_category = Column(String(300))
+    preview_message_id = Column(BigInteger)
