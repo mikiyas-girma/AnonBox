@@ -42,7 +42,8 @@ def browse_callback(message):
             else:
                 bot.reply_to(message, "Question not found")
             answers = session.query(Answer).filter(
-                Answer.question_id == question_id).all()
+                Answer.question_id == question_id, Answer.status == 'posted').all()
+            session.commit()
             if answers:
                 for answer in answers:
                     key = create_anw_key(answer_id=answer.answer_id)

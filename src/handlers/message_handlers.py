@@ -155,14 +155,16 @@ once you are done")
                                       callback_data='Edit Question'),
                  InlineKeyboardButton(
                      'Cancel',
-                     callback_data=f"Cancelled_{message.message_id}_{question_category}_{user_question}"),
+                     callback_data=f"Cancelled_{message.message_id}_\
+                        {question_category}_{user_question}"),
                  InlineKeyboardButton('Submit',
-                                      callback_data=f"Submitted_{user_question}_{question_category}"))
+                                      callback_data=f"Submitted_\
+                                        {user_question}_{question_category}"))
     print("the question was", message.message_id,
           user_question, question_category)
 
-    bot.send_message(message.chat.id, f"#{question_category}\n\n{user_question}\n\nBy: \
-{name}\n ``` Status: previewing```",
+    bot.send_message(message.chat.id, f"#{question_category}\n\n\
+{user_question}\n\nBy: {name}\n ``` Status: previewing```",
                      parse_mode="Markdown", reply_markup=keyboard)
 
 
