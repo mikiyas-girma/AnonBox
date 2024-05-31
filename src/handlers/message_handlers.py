@@ -81,7 +81,7 @@ def handle_ask_question(message):
     keyboard = ReplyKeyboardMarkup(one_time_keyboard=True)
     keyboard.resize_keyboard = True
     keyboard.row_width = 1
-    keyboard.add(KeyboardButton('Cancel'))
+    keyboard.add(KeyboardButton('❌ Cancel'))
 
     bot.send_message(
         message.chat.id,
@@ -98,17 +98,28 @@ def handle_question(message):
     keyboard = ReplyKeyboardMarkup(one_time_keyboard=True)
     # keyboard.resize_keyboard = True
     keyboard.row_width = 2
-    keyboard.add(KeyboardButton('Technology'),
-                 KeyboardButton('Relationship'),
-                 KeyboardButton('Health'),
-                 KeyboardButton('Business'),
-                 KeyboardButton('Education'),
-                 KeyboardButton('Politics'),
-                 KeyboardButton('Science'),
-                 KeyboardButton('Cancel'),
-                 KeyboardButton('Other'))
+    keyboard.add(KeyboardButton('📱 Technology'),
+                 KeyboardButton('❤️ Relationship'),
+                 KeyboardButton('🩺 Health'),
+                 KeyboardButton('💲 Business'),
+                 KeyboardButton('📕 Education'),
+                 KeyboardButton('⚖️ Politics'),
+                 KeyboardButton('🔬 Science'),
+                 KeyboardButton('🎬 Entertainment'),
+                 KeyboardButton('🍣 Food'),
+                 KeyboardButton('⛳️ Sport'),
+                 KeyboardButton('🎨 Art'),
+                 KeyboardButton('🕍 Religion'),
+                 KeyboardButton('🧠 Philosophy'),
+                 KeyboardButton('🎵 Music'),
+                 KeyboardButton('👥 Society'),
+                 KeyboardButton('🙇‍♂️ Personal'),
+                 KeyboardButton('👩‍👩‍👦‍👦 Family'),
+                 KeyboardButton('🌍 Other'),
+                 KeyboardButton('🔙 Back'),
+                 KeyboardButton('❌ Cancel'))
 
-    if message.text == 'Cancel' or message.text == '/start' or \
+    if message.text == '❌ Cancel' or message.text == '/start' or \
        message.text == '/hello':
         return send_welcome(message)
     else:
@@ -126,14 +137,14 @@ def handle_category(message, question):
     global name
     print('in handle category', question)
 
-    if message.text == 'Cancel':
+    if message.text == '❌ Cancel':
         bot.edit_message_text(chat_id=message.chat.id,
                               message_id=message.message_id,
                               text="Select an option")
         return
 
     user_question = question
-    question_category = message.text
+    question_category = message.text[2:]
 
     bot.send_message(message.chat.id, "preview your question and press submit \
 once you are done")
