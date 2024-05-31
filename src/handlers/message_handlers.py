@@ -235,31 +235,29 @@ def handle_edit_question(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith('Cancelled_'))
 def handle_cancelled(call):
     global name
+    print("before split: ", call.data)
     message_id = call.data.split('_')[1]
     category = call.data.split('_')[2]
     question = call.data.split('_')[3]
-    admin_msg = call.data.split('_')[4]
+    admin_msg = int(call.data.split('_')[4])
 
-    print('the fours', message_id, category, question, admin_msg)
-    # keyboard = InlineKeyboardMarkup()
-    # keyboard.row_width = 2
-    # keyboard.add(
-    #     InlineKeyboardButton('Resubmit',
-    #                          callback_data=f"Resubmitted_{message_id}"))
+    print('the msg id & admin msg id: ', message_id, admin_msg)
 
     try:
         session = SessionLocal()
-        questionary = session.query(Question).get(message_id)
+        questionary = session.query(Question).\
+            filter_by(question_id=message_id).first()
         # questionary = session.query(Question).\
         #     filter_by(question_id=call.message.message_id).first()
         if questionary and questionary.status == "pending" and \
            questionary.user_id == call.from_user.id:
 
             questionary.status = "cancelled"
-            session.commit()
-            print("deleting from admin channel")
+            print("deleting from admin channel id was :", admin_msg)
             bot.delete_message(ADMIN_CHANNEL_ID, admin_msg)
-            print("deleted from admin")
+            questionary.admin_message_id = None
+            session.commit()
+            print("deleted from admin msg id: ", admin_msg)
         else:
             new_question = Question(
                 question_id=message_id,
@@ -268,13 +266,12 @@ def handle_cancelled(call):
                 category=category,
                 status="cancelled",
                 username=call.from_user.username,
-                name=name
+                name=name,
+                admin_message_id=admin_msg
             )
             session.add(new_question)
-
-        session.commit()
+            session.commit()
     except Exception as e:
-        session.rollback()
         print(e)
     finally:
         keyboard = InlineKeyboardMarkup()
@@ -305,7 +302,6 @@ def handle_resubmitted(call):
         if not question:
             bot.answer_callback_query(call.id, "Question not found")
         question.status = 'pending'
-        session.commit()
         admin_keyboard = create_admin_keyboard(question_id)
         admin_msg = bot.send_message(ADMIN_CHANNEL_ID,
                                      f"#{question.category}\n\n{question.question}\
@@ -320,7 +316,8 @@ def handle_resubmitted(call):
         keyboard.add(
             InlineKeyboardButton(
                 'Cancel',
-                callback_data=f"Cancelled_{question_id}_{question.category}_{question.question}_{admin_msg.message_id}"))
+                callback_data=f"Cancelled_{question_id}_{question.category}_{question.question}_\
+                    {admin_msg.message_id}"))
         bot.answer_callback_query(
             call.id,
             "Your question has been Resubmitted for approval! it will be \
@@ -390,19 +387,8 @@ def handle_admin_action(call):
             \n\nBy: {name}\n ``` Status: {question.status}```",
                                   parse_mode="Markdown", reply_markup=keyboard)
 
-        elif call.data.startswith('reject'):
-            question.status = 'rejected'
-            bot.send_message(question.user_id,
-                             "Your question has been rejected")
-            if question.public_message_id:
-                bot.delete_message(PUBLIC_CHANNEL_ID,
-                                   question.public_message_id)
-                bot.edit_message_text(chat_id=question.user_id,
-                                      message_id=notify.message_id,
-                                      text=f"#{question.category}\n\n{question.question}\
-                                      \n\nBy: {name}\n ``` Status: {question.status}```",
-                                      parse_mode="Markdown")
         session.commit()
+        print("after commit: ", question.public_message_id)
     except Exception as e:
         session.rollback()
         print(e)
@@ -410,9 +396,18 @@ def handle_admin_action(call):
         session.close()
 
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith('reject'))
+@bot.callback_query_handler(func=lambda call: call.data.startswith('reject_'))
 def handle_reject(call):
     global name
+    print("before splitting reject data :", call.data)
+    if len(call.data.split('_')) == 3:
+        question_id = int(call.data.split('_')[1])
+        public_msg_id = int(call.data.split('_')[2])
+    else:
+        question_id = int(call.data.split('_')[1])
+        public_msg_id = None
+    print("from call data with reject : ", question_id, public_msg_id)
+
     session = SessionLocal()
     try:
         args = call.data.split('_')
@@ -431,7 +426,8 @@ def handle_reject(call):
         keyboard = InlineKeyboardMarkup()
         keyboard.row_width = 2
         keyboard.add(InlineKeyboardButton('Approve',
-                                          callback_data=f"approve_{question_id}_{question.public_message_id}"))
+                                          callback_data=f"approve_{question_id}_\
+                                            {question.public_message_id}"))
         bot.send_message(question.user_id,
                          "Your question has been rejected",
                          reply_to_message_id=question.question_id)
@@ -446,6 +442,7 @@ def handle_reject(call):
         \n\nBy: {name}\n ``` Status: {question.status}```",
                               parse_mode="Markdown", reply_markup=keyboard)
         bot.delete_message(PUBLIC_CHANNEL_ID, public_msg_id)
+        question.public_message_id = None
         session.commit()
     except Exception as e:
         session.rollback()
