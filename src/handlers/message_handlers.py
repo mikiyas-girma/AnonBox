@@ -13,6 +13,8 @@ import os
 from handlers.answer_to import answer_callback
 from handlers.browse_anwers import browse_callback
 from models.answer import Answer
+from models.asked import Asked
+from hashlib import sha256
 
 ADMIN_CHANNEL_ID = os.getenv('ADMIN_CHANNEL_ID')
 PUBLIC_CHANNEL_ID = os.getenv('PUBLIC_CHANNEL_ID')
@@ -98,24 +100,24 @@ def handle_question(message):
     keyboard = ReplyKeyboardMarkup(one_time_keyboard=True)
     # keyboard.resize_keyboard = True
     keyboard.row_width = 2
-    keyboard.add(KeyboardButton('📱 Technology'),
-                 KeyboardButton('❤️ Relationship'),
-                 KeyboardButton('🩺 Health'),
-                 KeyboardButton('💲 Business'),
-                 KeyboardButton('📕 Education'),
-                 KeyboardButton('⚖️ Politics'),
-                 KeyboardButton('🔬 Science'),
-                 KeyboardButton('🎬 Entertainment'),
-                 KeyboardButton('🍣 Food'),
-                 KeyboardButton('⛳️ Sport'),
-                 KeyboardButton('🎨 Art'),
-                 KeyboardButton('🕍 Religion'),
-                 KeyboardButton('🧠 Philosophy'),
-                 KeyboardButton('🎵 Music'),
-                 KeyboardButton('👥 Society'),
-                 KeyboardButton('🙇‍♂️ Personal'),
-                 KeyboardButton('👩‍👩‍👦‍👦 Family'),
-                 KeyboardButton('🌍 Other'),
+    keyboard.add(KeyboardButton('Technology'),
+                 KeyboardButton('Relationship'),
+                 KeyboardButton('Health'),
+                 KeyboardButton('Business'),
+                 KeyboardButton('Education'),
+                 KeyboardButton('Politics'),
+                 KeyboardButton('Science'),
+                 KeyboardButton('Entertainment'),
+                 KeyboardButton('Food'),
+                 KeyboardButton('Sport'),
+                 KeyboardButton('Art'),
+                 KeyboardButton('Religion'),
+                 KeyboardButton('Philosophy'),
+                 KeyboardButton('Music'),
+                 KeyboardButton('Society'),
+                 KeyboardButton('Personal'),
+                 KeyboardButton('Family'),
+                 KeyboardButton('Other'),
                  KeyboardButton('🔙 Back'),
                  KeyboardButton('❌ Cancel'))
 
@@ -143,11 +145,17 @@ def handle_category(message, question):
                               text="Select an option")
         return
 
-    user_question = question
-    question_category = message.text[2:]
-
     bot.send_message(message.chat.id, "preview your question and press submit \
 once you are done")
+
+    session = SessionLocal()
+    print("to asked :", question, message.text)
+    asked_query = Asked(user_question=question,
+                        question_id=message.message_id,
+                        question_category=message.text)
+    session.add(asked_query)
+    asked_query_id = asked_query.question_id
+    session.commit()
 
     keyboard = InlineKeyboardMarkup()
     keyboard.row_width = 2
@@ -155,53 +163,50 @@ once you are done")
                                       callback_data='Edit Question'),
                  InlineKeyboardButton(
                      'Cancel',
-                     callback_data=f"Cancelled_{message.message_id}_\
-                        {question_category}_{user_question}"),
-                 InlineKeyboardButton('Submit',
-                                      callback_data=f"Submitted_\
-                                        {user_question}_{question_category}"))
-    print("the question was", message.message_id,
-          user_question, question_category)
+                     callback_data=f"Cancelled_{asked_query_id}"),
+                 InlineKeyboardButton(
+                     'Submit',
+                     callback_data=f"Submitted_{asked_query_id}"))
 
-    bot.send_message(message.chat.id, f"#{question_category}\n\n\
-{user_question}\n\nBy: {name}\n ``` Status: previewing```",
+    bot.send_message(message.chat.id, f"#{asked_query.question_category}\n\n\
+{asked_query.user_question}\n\nBy: {name}\n ``` Status: previewing```",
                      parse_mode="Markdown", reply_markup=keyboard)
+    send_welcome(message)
+    session.close()
 
 
 # submit question callback handler
 @bot.callback_query_handler(func=lambda call: call.data.startswith('Submitted_'))
 def handle_submit_question(call):
-    print("in handle submit",
-          call.data)
     global name
-    query = call.data.split('_')
-    question = query[1]
-    category = query[2]
+    asked_query_id = call.data.split('_')[-1]
+    session = SessionLocal()
+    asked_query = session.query(Asked).filter_by(question_id=asked_query_id).first()
+    session.close()
 
+    if asked_query is not None:
+        question_id = asked_query.question_id
+        question = asked_query.user_question
+        category = asked_query.question_category
     session = SessionLocal()
     try:
         new_question = Question(
             user_id=call.from_user.id,
-            question_id=call.message.message_id,
-            question=question,
+            question_id=question_id,
+            question=question[:10],
             category=category,
             status="pending",
             name=name,
             username=call.from_user.username
         )
 
-        admin_keyboard = create_admin_keyboard(new_question.question_id)
+        admin_keyboard = create_admin_keyboard(question_id)
         admin_msg = bot.send_message(ADMIN_CHANNEL_ID,
                                      f"#{category}\n\n{question}\
         \n\nBy: {name}\n ``` Status: {new_question.status}```",
                                      reply_markup=admin_keyboard,
                                      parse_mode="Markdown")
         new_question.admin_message_id = admin_msg.message_id
-        # new_admin_message = AdminMessage(
-        #     user_message_id=new_question.message_id,
-        #     admin_message_id=admin_message.message_id
-        # )
-        # session.add(new_admin_message)
         session.add(new_question)
         session.commit()
         bot.send_message(call.message.chat.id, "Submitted")
@@ -216,8 +221,7 @@ def handle_submit_question(call):
         keyboard.add(
             InlineKeyboardButton(
                 'Cancel',
-                callback_data=f"Cancelled_{call.message.message_id}_{category}_\
-                    {question}_{admin_msg.message_id}"))
+                callback_data=f"Cancelled_{admin_msg.message_id}_{asked_query_id}"))
         bot.answer_callback_query(
             call.id,
             "Your question has been submitted for approval! it will be \
@@ -248,69 +252,76 @@ def handle_edit_question(call):
 @bot.callback_query_handler(func=lambda call: call.data.startswith('Cancelled_'))
 def handle_cancelled(call):
     global name
-    print("before split: ", call.data)
-    message_id = call.data.split('_')[1]
-    category = call.data.split('_')[2]
-    question = call.data.split('_')[3]
-    admin_msg = int(call.data.split('_')[4])
+    asked_query_id = call.data.split('_')[-1]
+    session = SessionLocal()
+    asked_query = session.query(Asked).filter_by(question_id=asked_query_id).first()
 
-    print('the msg id & admin msg id: ', message_id, admin_msg)
+    if asked_query is not None:
+        print("call.data before splitting: ", call.data)
+        question = asked_query.user_question
+        category = asked_query.question_category
 
-    try:
-        session = SessionLocal()
-        questionary = session.query(Question).\
-            filter_by(question_id=message_id).first()
-        # questionary = session.query(Question).\
-        #     filter_by(question_id=call.message.message_id).first()
-        if questionary and questionary.status == "pending" and \
-           questionary.user_id == call.from_user.id:
+        try:
+            session = SessionLocal()
+            questionary = session.query(Question).\
+                filter_by(question_id=asked_query_id).first()
 
-            questionary.status = "cancelled"
-            print("deleting from admin channel id was :", admin_msg)
-            bot.delete_message(ADMIN_CHANNEL_ID, admin_msg)
-            questionary.admin_message_id = None
-            session.commit()
-            print("deleted from admin msg id: ", admin_msg)
-        else:
-            new_question = Question(
-                question_id=message_id,
-                user_id=call.from_user.id,
-                question=question,
-                category=category,
-                status="cancelled",
-                username=call.from_user.username,
-                name=name,
-                admin_message_id=admin_msg
-            )
-            session.add(new_question)
-            session.commit()
-    except Exception as e:
-        print(e)
-    finally:
-        keyboard = InlineKeyboardMarkup()
-        keyboard.row_width = 2
-        keyboard.add(
-            InlineKeyboardButton('Resubmit',
-                                 callback_data=f"Resubmitted_{message_id}"))
+            if questionary and questionary.status == "pending" and \
+               questionary.user_id == call.from_user.id:
 
-        bot.edit_message_text(chat_id=call.message.chat.id,
-                              message_id=call.message.message_id,
-                              text=f"#{category}\n\n{question}\
+                questionary.status = "cancelled"
+                print("deleting from admin channel id was :", questionary.admin_message_id)
+                bot.delete_message(ADMIN_CHANNEL_ID, questionary.admin_message_id)
+                questionary.admin_message_id = None
+                session.commit()
+                print("deleted from admin msg id: ", questionary.admin_message_id)
+            else:
+                new_question = Question(
+                    user_id=call.from_user.id,
+                    question_id=asked_query_id,
+                    question=question[:10],
+                    category=category,
+                    status="cancelled",
+                    name=name,
+                    username=call.from_user.username
+                    )
+                session.add(new_question)
+                session.commit()
+
+        except Exception as e:
+            print(e)
+        finally:
+            keyboard = InlineKeyboardMarkup()
+            keyboard.row_width = 2
+            keyboard.add(
+                InlineKeyboardButton(
+                    'Resubmit',
+                    callback_data=f"Resubmitted_{asked_query_id}"))
+
+    bot.edit_message_text(chat_id=call.message.chat.id,
+                          message_id=call.message.message_id,
+                          text=f"#{category}\n\n{question}\
         \n\nBy: {name}\n ``` Status: Cancelled```",
-                              parse_mode="Markdown", reply_markup=keyboard)
+                          parse_mode="Markdown", reply_markup=keyboard)
 
-        bot.send_message(call.message.chat.id, "Cancelled")
-        session.close()
+    bot.send_message(call.message.chat.id, "Cancelled")
+    session.close()
 
 
 # when resubmitted
 @bot.callback_query_handler(func=lambda call: call.data.startswith('Resubmitted_'))
 def handle_resubmitted(call):
     global name
-    question_id = call.data.split('_')[-1]
-    print(question_id)
+    asked_query_id = call.data.split('_')[-1]
     session = SessionLocal()
+    asked_query = session.query(Asked).filter_by(question_id=asked_query_id).first()
+
+    if asked_query is not None:
+        question_id = asked_query.question_id
+        question = asked_query.user_question
     try:
+        session = SessionLocal()
+        print("from resubmitted: from cancelled", question_id, asked_query_id)
         question = session.query(Question).get(question_id)
         if not question:
             bot.answer_callback_query(call.id, "Question not found")
@@ -329,8 +340,7 @@ def handle_resubmitted(call):
         keyboard.add(
             InlineKeyboardButton(
                 'Cancel',
-                callback_data=f"Cancelled_{question_id}_{question.category}_{question.question}_\
-                    {admin_msg.message_id}"))
+                callback_data=f"Cancelled_{admin_msg.message_id}_{asked_query_id}"))
         bot.answer_callback_query(
             call.id,
             "Your question has been Resubmitted for approval! it will be \
@@ -491,35 +501,3 @@ def create_answer_keyboard(question_id):
     )
     keyboard.add(answer_button, browse_button)
     return keyboard
-
-
-@bot.message_handler(content_types=['photo'])
-def handle_photo_upload(message):
-    photo_file_id = message.photo[-1].file_id
-    file_info = bot.get_file(photo_file_id)
-    bot.send_message(message.chat.id, file_info.file_path)
-    bot.send_photo(message.chat.id, photo_file_id,
-                   caption="Thank you for uploading photo!")
-
-
-uploaded_videos = {}
-
-
-@bot.message_handler(content_types=['video'])
-def handle_video_upload(message):
-    video_file_id = message.video.file_id
-    # bot.send_message(message.chat.id, f"{message.video}\
-    #                  thank you for the video")
-    bot.send_video(message.chat.id, video_file_id,
-                   caption="here is what you sent")
-    uploaded_videos[message.chat.id] = video_file_id
-
-
-@bot.message_handler(commands=['showvideo'])
-def show_uploaded_video(message):
-    chat_id = message.chat.id
-    if chat_id in uploaded_videos:
-        video_file_id = uploaded_videos[chat_id]
-        bot.send_video(chat_id, video_file_id)
-    else:
-        bot.send_message(chat_id, "No video was uploaded previously.")
