@@ -45,16 +45,30 @@ def browse_callback(message):
             else:
                 bot.reply_to(message, "Question not found")
             answers = session.query(Answer).filter(
-                Answer.question_id == question_id, Answer.status == 'posted').all()
+                Answer.question_id == question_id, Answer.status == 'posted',
+                Answer.reply_to == None).all()
             session.commit()
             if answers:
                 for answer in answers:
                     key = create_anw_key(answer_id=answer.answer_id)
-                    bot.send_message(
+                    reply_text = f"{answer.answer}\n\nBy: {username}"
+                    sent_message = bot.send_message(
                         chat_id=message.chat.id,
-                        text=f"{answer.answer}\n\nBy: {username}",
-                        reply_to_message_id=message.message_id,
+                        text=reply_text,
                         reply_markup=key)
+                    answer.tg_msg_id = sent_message.message_id
+                    session.commit()
+
+                    replies = session.query(Answer).filter(
+                        Answer.reply_to == answer.answer_id).all()
+                    for reply in replies:
+                        reply_text = f"{reply.answer}\n\nBy: {reply.username}"
+                        sent_message = bot.send_message(
+                            chat_id=message.chat.id,
+                            text=reply_text,
+                            reply_to_message_id=answer.tg_msg_id,
+                            reply_markup=create_anw_key(reply.answer_id))
+
             else:
                 print("No answers found")
                 bot.reply_to(message, "No answers found")
@@ -190,6 +204,7 @@ def process_reply(message, answer_id):
         original_answer = session.query(Answer).get(answer_id)
 
         new_answer = Answer(
+            answer_id=message.message_id,
             question_id=original_answer.question_id,
             user_id=message.from_user.id,
             username=message.from_user.username,
@@ -201,9 +216,11 @@ def process_reply(message, answer_id):
         )
         session.add(new_answer)
         session.commit()
-        bot.send_message(
+        sent_message = bot.send_message(
             chat_id=message.chat.id,
             text="Your reply has been saved.")
+        new_answer.tg_msg_id = sent_message.message_id
+        session.commit()
     except Exception as e:
         bot.reply_to(message, "An error occurred")
         print(e)

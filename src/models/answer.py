@@ -16,3 +16,4 @@ class Answer(Base):
     dislikes = Column(BigInteger, nullable=True, default=0)
     reputation = Column(BigInteger, nullable=True)
     reply_to = Column(BigInteger, ForeignKey('answers.answer_id'), nullable=True)
+    tg_msg_id = Column(BigInteger, nullable=True)

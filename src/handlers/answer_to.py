@@ -87,15 +87,18 @@ def process_answer(message, question_id):
             chat_id=message.chat.id,
             answer=answer,
             status='draft',
+            reply_to=None,
             reputation=0,
         )
         anw_keyboard = create_answer_keyboard(answer_id=new_answer.answer_id)
 
         session.add(new_answer)
         session.commit()
-        bot.send_message(message.chat.id,
-                         f"{new_answer.answer}\n\nBy: {name}",
-                         reply_markup=anw_keyboard)
+        sent_message = bot.send_message(message.chat.id,
+                                        f"{new_answer.answer}\n\nBy: {name}",
+                                        reply_markup=anw_keyboard)
+        new_answer.tg_msg_id = sent_message.message_id
+        session.commit()
         bot.register_next_step_handler(
             message, process_post_answer,
             new_answer.answer_id, message.message_id)
