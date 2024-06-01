@@ -6,6 +6,7 @@ from models.question import Question
 from models.answer import Answer
 from models.asked import Asked
 from models.user_reaction import UserReaction
+from collections import deque
 bot = bot.bot
 
 username = 'Anonymous'
@@ -49,25 +50,28 @@ def browse_callback(message):
                 Answer.reply_to == None).all()
             session.commit()
             if answers:
-                for answer in answers:
+                queue = deque(answers)
+                while queue:
+                    answer = queue.popleft()
+
                     key = create_anw_key(answer_id=answer.answer_id)
                     reply_text = f"{answer.answer}\n\nBy: {username}"
+                    reply_to_message_id = None
+                    if answer.reply_to is not None:
+                        parent_answer = session.query(Answer).get(
+                            answer.reply_to)
+                        if parent_answer is not None:
+                            reply_to_message_id = parent_answer.tg_msg_id
                     sent_message = bot.send_message(
                         chat_id=message.chat.id,
                         text=reply_text,
-                        reply_markup=key)
+                        reply_markup=key,
+                        reply_to_message_id=reply_to_message_id)
                     answer.tg_msg_id = sent_message.message_id
                     session.commit()
-
                     replies = session.query(Answer).filter(
                         Answer.reply_to == answer.answer_id).all()
-                    for reply in replies:
-                        reply_text = f"{reply.answer}\n\nBy: {reply.username}"
-                        sent_message = bot.send_message(
-                            chat_id=message.chat.id,
-                            text=reply_text,
-                            reply_to_message_id=answer.tg_msg_id,
-                            reply_markup=create_anw_key(reply.answer_id))
+                    queue.extend(replies)
 
             else:
                 print("No answers found")
