@@ -90,14 +90,34 @@ def on_answer(call):
     answer_id = int(call.data.split('_')[-1])
     session = SessionLocal()
     try:
-        new_reaction = UserReaction(
-            user_id=call.message.chat.id,
-            answer_id=answer_id,
-            reaction_type='liked'
-        )
-        session.add(new_reaction)
+        answers = session.query(Answer).get(answer_id)
+        user_reaction = session.query(UserReaction).filter_by(
+            user_id=call.from_user.id, answer_id=answer_id).first()
+        if user_reaction:
+            if user_reaction.reaction_type == 'like':
+                answers.likes -= 1
+                bot.answer_callback_query(
+                    call.id, "You have unliked this answer")
+                user_reaction.reaction_type = 'none'
+            elif user_reaction.reaction_type == 'dislike':
+                answers.dislikes -= 1
+                answers.likes += 1
+                bot.answer_callback_query(
+                    call.id, "You have liked this answer")
+                user_reaction.reaction_type = 'like'
+        else:
+            answers.likes += 1
+            bot.answer_callback_query(call.id, "You have liked this answer")
+            session.add(UserReaction(
+                user_id=call.from_user.id, answer_id=answer_id, reaction_type='like'))
         session.commit()
+        key = create_anw_key(answer_id)
+        bot.edit_message_reply_markup(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            reply_markup=key)
     except Exception as e:
+        bot.answer_callback_query(call.id, "An error occurred")
         print(e)
     finally:
         session.close()
