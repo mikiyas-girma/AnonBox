@@ -82,34 +82,53 @@ def create_anw_key(answer_id):
     return keyboard
 
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith('like_'))
+@bot.callback_query_handler(func=lambda call: call.data.startswith(('like_', 'dislike_')))
 def on_answer(call):
     """
     Handle callback queries on each answers
     """
-    answer_id = int(call.data.split('_')[-1])
+    reaction_type, answer_id = call.data.split('_')
+    answer_id = int(answer_id)
+    user_id = call.from_user.id
     session = SessionLocal()
     try:
-        answers = session.query(Answer).get(answer_id)
+        answer = session.query(Answer).get(answer_id)
+        if not answer:
+            bot.answer_callback_query(call.id, "Answer does not exist")
+            return
+
         user_reaction = session.query(UserReaction).filter_by(
-            user_id=call.from_user.id, answer_id=answer_id).first()
+            user_id=user_id, answer_id=answer_id).first()
+
         if user_reaction:
-            if user_reaction.reaction_type == 'like':
-                answers.likes -= 1
-                bot.answer_callback_query(
-                    call.id, "You have unliked this answer")
-                user_reaction.reaction_type = 'none'
-            elif user_reaction.reaction_type == 'dislike':
-                answers.dislikes -= 1
-                answers.likes += 1
-                bot.answer_callback_query(
-                    call.id, "You have liked this answer")
-                user_reaction.reaction_type = 'like'
+            if user_reaction.reaction_type == reaction_type:
+                # User wants to undo their reaction
+                if reaction_type == 'like':
+                    answer.likes -= 1
+                else:
+                    answer.dislikes -= 1
+                session.delete(user_reaction)
+                bot.answer_callback_query(call.id, f"You have un{reaction_type}d this answer")
+            else:
+                # User wants to change their reaction
+                if reaction_type == 'like':
+                    answer.likes += 1
+                    if user_reaction.reaction_type == 'dislike':
+                        answer.dislikes -= 1
+                else:
+                    answer.likes -= 1
+                    answer.dislikes += 1
+                user_reaction.reaction_type = reaction_type
+                bot.answer_callback_query(call.id, f"You have {reaction_type}d this answer")
         else:
-            answers.likes += 1
-            bot.answer_callback_query(call.id, "You have liked this answer")
-            session.add(UserReaction(
-                user_id=call.from_user.id, answer_id=answer_id, reaction_type='like'))
+            # User wants to add a new reaction
+            if reaction_type == 'like':
+                answer.likes += 1
+            else:
+                answer.dislikes += 1
+            session.add(UserReaction(user_id=user_id, answer_id=answer_id, reaction_type=reaction_type))
+            bot.answer_callback_query(call.id, f"You have {reaction_type}d this answer")
+
         session.commit()
         key = create_anw_key(answer_id)
         bot.edit_message_reply_markup(
