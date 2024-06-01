@@ -53,6 +53,7 @@ def browse_callback(message):
                     bot.send_message(
                         chat_id=message.chat.id,
                         text=f"{answer.answer}\n\nBy: {username}",
+                        reply_to_message_id=message.message_id,
                         reply_markup=key)
             else:
                 print("No answers found")
@@ -108,7 +109,8 @@ def on_answer(call):
                 else:
                     answer.dislikes -= 1
                 session.delete(user_reaction)
-                bot.answer_callback_query(call.id, f"You have un{reaction_type}d this answer")
+                bot.answer_callback_query(call.id,
+                                          "You have unmarked this answer")
             else:
                 # User wants to change their reaction
                 if reaction_type == 'like':
@@ -119,15 +121,20 @@ def on_answer(call):
                     answer.likes -= 1
                     answer.dislikes += 1
                 user_reaction.reaction_type = reaction_type
-                bot.answer_callback_query(call.id, f"You have {reaction_type}d this answer")
+                bot.answer_callback_query(
+                    call.id,
+                    f"You have {reaction_type}d this answer")
         else:
             # User wants to add a new reaction
             if reaction_type == 'like':
                 answer.likes += 1
             else:
                 answer.dislikes += 1
-            session.add(UserReaction(user_id=user_id, answer_id=answer_id, reaction_type=reaction_type))
-            bot.answer_callback_query(call.id, f"You have {reaction_type}d this answer")
+            session.add(UserReaction(user_id=user_id,
+                                     answer_id=answer_id,
+                                     reaction_type=reaction_type))
+            bot.answer_callback_query(call.id,
+                                      f"You have {reaction_type}d this answer")
 
         session.commit()
         key = create_anw_key(answer_id)
@@ -137,6 +144,68 @@ def on_answer(call):
             reply_markup=key)
     except Exception as e:
         bot.answer_callback_query(call.id, "An error occurred")
+        print(e)
+    finally:
+        session.close()
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('replyto_'))
+def on_reply_to(call):
+    """
+    Handle callback queries on each answers
+    """
+    answer_id = int(call.data.split('_')[-1])
+    session = SessionLocal()
+    try:
+        answer = session.query(Answer).get(answer_id)
+        if not answer:
+            bot.answer_callback_query(call.id, "Answer does not exist")
+            return
+        keyboard = ReplyKeyboardMarkup(one_time_keyboard=True)
+        keyboard.resize_keyboard = True
+        keyboard.add(KeyboardButton('Cancel'))
+        bot.send_message(
+            chat_id=call.message.chat.id,
+            text="Send your reply:",
+            reply_markup=keyboard)
+        bot.register_next_step_handler(call.message, process_reply, answer_id)
+    except Exception as e:
+        bot.answer_callback_query(call.id, "An error occurred in on reply to")
+        print(e)
+    finally:
+        session.close()
+
+
+def process_reply(message, answer_id):
+    """
+    Process user's reply to an answer
+    """
+    if message.text == 'Cancel':
+        bot.send_message(chat_id=message.chat.id, text="Cancelled")
+        return
+
+    session = SessionLocal()
+    try:
+        reply = message.text
+        original_answer = session.query(Answer).get(answer_id)
+
+        new_answer = Answer(
+            question_id=original_answer.question_id,
+            user_id=message.from_user.id,
+            username=message.from_user.username,
+            chat_id=message.chat.id,
+            answer=reply,
+            status='posted',
+            reputation=0,
+            reply_to=answer_id
+        )
+        session.add(new_answer)
+        session.commit()
+        bot.send_message(
+            chat_id=message.chat.id,
+            text="Your reply has been saved.")
+    except Exception as e:
+        bot.reply_to(message, "An error occurred")
         print(e)
     finally:
         session.close()

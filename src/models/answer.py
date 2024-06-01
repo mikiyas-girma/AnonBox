@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, BigInteger
+from sqlalchemy import Column, String, BigInteger, ForeignKey
 from models.engine.storage import Base
 
 
@@ -15,3 +15,4 @@ class Answer(Base):
     likes = Column(BigInteger, nullable=True, default=0)
     dislikes = Column(BigInteger, nullable=True, default=0)
     reputation = Column(BigInteger, nullable=True)
+    reply_to = Column(BigInteger, ForeignKey('answers.answer_id'), nullable=True)
